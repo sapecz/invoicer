@@ -1,21 +1,21 @@
-# Invoicer (React + Express + Prisma + SQLite)
+# Invoicer (React + Express + Prisma)
 
 This is a full-stack invoicing starter app:
 
 - Frontend: React + Vite + TypeScript
 - Backend: Express + TypeScript
-- Database: SQLite via Prisma ORM
+- Database: PostgreSQL via Prisma ORM
 
 ## Features
 
 - Login and registration required to use invoice data
 - Google login support (OAuth redirect flow)
-- User accounts stored in SQLite (Prisma `User` model)
+- User accounts stored in PostgreSQL (Prisma `User` model)
 - Per-user invoice storage (users only see their own invoices)
 - UI localization: CZ, EN, GER, RU
 - Light and dark theme switching
 - Create invoices from the UI
-- Persist invoices in SQLite
+- Persist invoices in PostgreSQL
 - List all invoices from the database
 - Local API proxy from Vite to Express
 
@@ -36,13 +36,15 @@ This is a full-stack invoicing starter app:
 npm install
 ```
 
-2. Create/apply database migration:
+2. Set `DATABASE_URL` in `.env` to your PostgreSQL database.
+
+3. Sync the schema:
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma db push
 ```
 
-3. Start the app:
+4. Start the app:
 
 ```bash
 npm run dev
