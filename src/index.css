@@ -1,0 +1,68 @@
+:root {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+  color: #121827;
+  background: radial-gradient(circle at top right, #ceeaff 0%, #eef7ff 40%, #edf9f0 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --text: #121827;
+  --muted: #5a6172;
+  --card-bg: #ffffff;
+  --card-border: #e7e8ef;
+  --card-shadow: 0 8px 30px rgba(26, 29, 35, 0.06);
+  --row-bg: #f9fafc;
+  --input-border: #d2d8e6;
+  --button-text: #ffffff;
+  --button-1: #0058b3;
+  --button-2: #1ca84a;
+  --hero-text: #f4faff;
+  --hero-1: #003d87;
+  --hero-2: #0070cc;
+  --hero-3: #1aa845;
+  --error: #b1182b;
+}
+
+:root[data-theme='dark'] {
+  color: #e6ecff;
+  background: radial-gradient(circle at top right, #1a2240 0%, #101a2d 40%, #0f2c28 100%);
+
+  --text: #ecf2ff;
+  --muted: #a5b2d1;
+  --card-bg: #141d2f;
+  --card-border: #263553;
+  --card-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  --row-bg: #18243a;
+  --input-border: #32486f;
+  --button-text: #f5fbff;
+  --button-1: #2277d6;
+  --button-2: #33b556;
+  --hero-text: #eef4ff;
+  --hero-1: #001f50;
+  --hero-2: #0d4f99;
+  --hero-3: #0b7a30;
+  --error: #ff6d87;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}

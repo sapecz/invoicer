@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Invoice {
+  id          Int            @id @default(autoincrement())
+  userId      Int
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId  Int?
+  customer    Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status      String         @default("draft") // draft, unpaid, paid
+  issueDate   DateTime?
+  dueDate     DateTime?
+  duePreset   String?
+  bankAccount String?
+  taxDate     DateTime?
+  constantSymbol String?
+  specificSymbol String?
+  variableSymbol String?
+  invoiceText String?
+  includeVat  Boolean        @default(false)
+  vatRate     Float?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  items       InvoiceItem[]
+}
+
+model InvoiceItem {
+  id        Int      @id @default(autoincrement())
+  invoiceId Int
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  projectId Int?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  days      Float?
+  amount    Float
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id                      Int        @id @default(autoincrement())
+  email                   String     @unique
+  passwordHash            String
+  displayName             String
+  bankAccount             String?
+  companyIc               String?
+  logoDataUrl             String?
+  isVerified              Boolean    @default(false)
+  verificationCode        String?
+  verificationCodeExpires DateTime?
+  resetToken              String?
+  resetTokenExpires       DateTime?
+  createdAt               DateTime   @default(now())
+  invoices                Invoice[]
+  customers               Customer[]
+  orders                  Order[]
+  projects                Project[]
+  receivedDocuments       ReceivedDocument[]
+}
+
+model ReceivedDocument {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        String   @default("draft") // draft, approved
+  fileName      String
+  sourceType    String   // pdf, image, manual
+  supplierName  String?
+  supplierIc    String?
+  invoiceNumber String?
+  bankAccount   String?
+  variableSymbol String?
+  constantSymbol String?
+  issueDate     DateTime?
+  dueDate       DateTime?
+  currency      String   @default("CZK")
+  baseAmount    Float?
+  vatAmount     Float?
+  totalAmount   Float?
+  vatRate       Float?
+  extractedText String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  ic        String?
+  dic       String?
+  email     String?
+  phone     String?
+  address   String?
+  city      String?
+  zip       String?
+  country   String?
+  createdAt DateTime  @default(now())
+  invoices  Invoice[]
+  orders    Order[]
+}
+
+model Order {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId Int
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  title      String
+  code       String?
+  amount     Float?
+  currency   String    @default("CZK")
+  createdAt  DateTime  @default(now())
+  projects   Project[]
+}
+
+model Project {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   Int?
+  order     Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  name      String
+  pricingMode String      @default("md")
+  days      Int?
+  budget    Float?
+  mdRate    Float?
+  currency  String        @default("CZK")
+  daysUsed  Float         @default(0)
+  budgetUsed Float        @default(0)
+  archived  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  items     InvoiceItem[]
+}
