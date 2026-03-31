@@ -1442,3 +1442,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+.app-version {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #999);
+  opacity: 0.6;
+  margin: 0;
+  z-index: 10;
+}

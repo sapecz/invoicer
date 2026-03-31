@@ -4885,7 +4885,7 @@ function App() {
 
           <form onSubmit={(e) => void handleSaveProject(e)} className="project-form">
             <label>
-              Order *
+              {workspaceUiText.order} *
               <select
                 value={projectForm.orderId ?? ''}
                 onChange={(e) =>
@@ -4896,7 +4896,7 @@ function App() {
                 }
                 required
               >
-                <option value="">Select existing order</option>
+                <option value="">{workspaceUiText.selectExistingOrder}</option>
                 {orders.map((order) => (
                   <option key={order.id} value={order.id}>
                     {order.title} ({order.customer.name})
@@ -4909,15 +4909,15 @@ function App() {
               <input value={projectForm.name} onChange={(e) => setProjectForm((f) => ({ ...f, name: e.target.value }))} required />
             </label>
             <label>
-              Pricing model
+              {workspaceUiText.pricingModel}
               <select
                 value={projectForm.pricingMode}
                 onChange={(e) =>
                   setProjectForm((f) => ({ ...f, pricingMode: e.target.value as 'md' | 'budget' }))
                 }
               >
-                <option value="md">MD deliverable</option>
-                <option value="budget">Budget</option>
+                <option value="md">{workspaceUiText.mdDeliverable}</option>
+                <option value="budget">{workspaceUiText.budgetMode}</option>
               </select>
             </label>
             <label>
@@ -4925,7 +4925,7 @@ function App() {
               <input type="number" value={projectForm.days} onChange={(e) => setProjectForm((f) => ({ ...f, days: e.target.value }))} min="1" />
             </label>
             <label>
-              Budget
+              {workspaceUiText.budgetLabel}
               <input type="number" value={projectForm.budget} onChange={(e) => setProjectForm((f) => ({ ...f, budget: e.target.value }))} step="0.01" min="0" />
             </label>
             <label>
@@ -5162,7 +5162,7 @@ function App() {
                 }
                 required
               >
-                <option value="">Select customer</option>
+                <option value="">{workspaceUiText.selectCustomer}</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -5171,7 +5171,7 @@ function App() {
               </select>
             </label>
             <label>
-              Order title *
+              {workspaceUiText.orderTitle} *
               <input
                 value={orderForm.title}
                 onChange={(e) => setOrderForm((f) => ({ ...f, title: e.target.value }))}
@@ -5179,7 +5179,7 @@ function App() {
               />
             </label>
             <label>
-              Order code
+              {workspaceUiText.orderCode}
               <input
                 value={orderForm.code}
                 onChange={(e) => setOrderForm((f) => ({ ...f, code: e.target.value }))}
@@ -5208,7 +5208,7 @@ function App() {
               </select>
             </label>
             <button type="submit" disabled={orderSaving} className="span-all">
-              {orderSaving ? t.saving : 'Save order'}
+              {orderSaving ? t.saving : workspaceUiText.saveOrder}
             </button>
           </form>
           {orderSaveMsg && <p className="error">{orderSaveMsg}</p>}
@@ -5754,6 +5754,7 @@ function App() {
           <section className="workspace-main">{renderSectionContent()}</section>
         </section>
       )}
+      <footer className="app-version">Verze 0.12</footer>
     </main>
   )
 }
