@@ -3487,7 +3487,8 @@ function App() {
       }
       setOrderForm(emptyOrderForm)
       setOrderSaveMsg('Order saved.')
-      await loadOrders(token)
+      // Reload active orders where new orders are created
+      await loadOrders(token, false)
     } catch (err) {
       setOrderSaveMsg(err instanceof Error ? err.message : 'Error')
     } finally {
@@ -5216,7 +5217,7 @@ function App() {
     }
 
     if (activeSection === 'orders' && activeSubmenu === 'active') {
-      const filteredOrders = orders.filter((order) => isInRangeByCreatedAt(order.createdAt, overviewRange))
+      const filteredOrders = orders.filter((order) => !order.archived && isInRangeByCreatedAt(order.createdAt, overviewRange))
       const visiblePreviewOrder =
         previewOrder && filteredOrders.some((order) => order.id === previewOrder.id)
           ? previewOrder
@@ -5345,7 +5346,7 @@ function App() {
     }
 
     if (activeSection === 'orders' && activeSubmenu === 'history') {
-      const filteredOrders = orders.filter((order) => isInRangeByCreatedAt(order.createdAt, overviewRange))
+      const filteredOrders = orders.filter((order) => order.archived && isInRangeByCreatedAt(order.createdAt, overviewRange))
       const visiblePreviewOrder =
         previewOrder && filteredOrders.some((order) => order.id === previewOrder.id)
           ? previewOrder
