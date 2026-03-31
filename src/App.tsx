@@ -66,6 +66,8 @@ type AccountProfile = {
   bankAccounts: BankAccountOption[]
   companyIc: string
   logoDataUrl: string
+  isVatPayer: boolean
+  requiresControlStatement: boolean
 }
 
 type Customer = {
@@ -393,7 +395,7 @@ const translations: Record<Language, Translation> = {
   en: {
     appName: 'Invoicer',
     title: 'Invoicer',
-    subtitle: 'Sign in to create and manage your personal invoices.',
+    subtitle: '',
     invoices: 'Invoices',
     totalAmount: 'Total Amount',
     newInvoice: 'New Invoice',
@@ -479,7 +481,7 @@ const translations: Record<Language, Translation> = {
     itemValueLabel: 'Value',
     includeVatLabel: 'Include VAT',
     vatRateLabel: 'VAT Rate (%)',
-    deleteAction: 'Delete',
+    deleteAction: '🗑',
     contactDeleted: 'Contact deleted.',
     deleteContactConfirm: 'Delete this contact? This cannot be undone.',
     contactChip: 'Contact',
@@ -541,7 +543,7 @@ const translations: Record<Language, Translation> = {
   cz: {
     appName: 'Fakturace',
     title: 'Invoicer',
-    subtitle: 'Přihlaste se a spravujte své osobní faktury.',
+    subtitle: '',
     invoices: 'Faktury',
     totalAmount: 'Celková částka',
     newInvoice: 'Nová faktura',
@@ -627,7 +629,7 @@ const translations: Record<Language, Translation> = {
     itemValueLabel: 'Hodnota k fakturaci',
     includeVatLabel: 'Včetně DPH',
     vatRateLabel: 'Sazba DPH (%)',
-    deleteAction: 'Smazat',
+    deleteAction: '🗑',
     contactDeleted: 'Kontakt byl smazán.',
     deleteContactConfirm: 'Smazat tento kontakt? Tuto akci nelze vrátit.',
     contactChip: 'Kontakt',
@@ -689,7 +691,7 @@ const translations: Record<Language, Translation> = {
   ger: {
     appName: 'RechnungApp',
     title: 'Invoicer',
-    subtitle: 'Melden Sie sich an, um Ihre Rechnungen zu verwalten.',
+    subtitle: '',
     invoices: 'Rechnungen',
     totalAmount: 'Gesamtbetrag',
     newInvoice: 'Neue Rechnung',
@@ -775,7 +777,7 @@ const translations: Record<Language, Translation> = {
     itemValueLabel: 'Rechnungswert',
     includeVatLabel: 'MwSt. einschließen',
     vatRateLabel: 'MwSt.-Satz (%)',
-    deleteAction: 'Löschen',
+    deleteAction: '🗑',
     contactDeleted: 'Kontakt gelöscht.',
     deleteContactConfirm: 'Diesen Kontakt löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
     contactChip: 'Kontakt',
@@ -837,7 +839,7 @@ const translations: Record<Language, Translation> = {
   ru: {
     appName: 'Инвойсер',
     title: 'Invoicer',
-    subtitle: 'Войдите, чтобы управлять своими счетами.',
+    subtitle: '',
     invoices: 'Счета',
     totalAmount: 'Общая сумма',
     newInvoice: 'Новый счет',
@@ -923,7 +925,7 @@ const translations: Record<Language, Translation> = {
     itemValueLabel: 'Сумма к выставлению',
     includeVatLabel: 'Включить НДС',
     vatRateLabel: 'Ставка НДС (%)',
-    deleteAction: 'Удалить',
+    deleteAction: '🗑',
     contactDeleted: 'Контакт удален.',
     deleteContactConfirm: 'Удалить этот контакт? Действие нельзя отменить.',
     contactChip: 'Контакт',
@@ -1086,7 +1088,14 @@ function App() {
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null)
   const [previewProject, setPreviewProject] = useState<Project | null>(null)
   const [previewDocument, setPreviewDocument] = useState<ReceivedDocument | null>(null)
-  const [accountProfile, setAccountProfile] = useState<AccountProfile>({ bankAccount: '', bankAccounts: [], companyIc: '', logoDataUrl: '' })
+  const [accountProfile, setAccountProfile] = useState<AccountProfile>({
+    bankAccount: '',
+    bankAccounts: [],
+    companyIc: '',
+    logoDataUrl: '',
+    isVatPayer: false,
+    requiresControlStatement: false,
+  })
   const [accountSaving, setAccountSaving] = useState(false)
   const [accountMessage, setAccountMessage] = useState('')
   const [documents, setDocuments] = useState<ReceivedDocument[]>([])
@@ -1198,6 +1207,8 @@ function App() {
         extractionFailedPrefix: 'Extrakce selhala',
         savedDraftMsg: 'Doklad uložen jako rozpracovaný.',
         savedApprovedMsg: 'Doklad uložen do historie.',
+        deleteDocConfirm: 'Smazat tento doklad? Tuto akci nelze vrátit.',
+        deletedMsg: 'Doklad byl smazán.',
       }
     }
     if (language === 'ger') {
@@ -1232,6 +1243,8 @@ function App() {
         extractionFailedPrefix: 'Extraktion fehlgeschlagen',
         savedDraftMsg: 'Beleg als Entwurf gespeichert.',
         savedApprovedMsg: 'Beleg in Verlauf gespeichert.',
+        deleteDocConfirm: 'Diesen Beleg löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
+        deletedMsg: 'Beleg gelöscht.',
       }
     }
     if (language === 'ru') {
@@ -1266,6 +1279,8 @@ function App() {
         extractionFailedPrefix: 'Ошибка извлечения',
         savedDraftMsg: 'Документ сохранен как черновик.',
         savedApprovedMsg: 'Документ сохранен в истории.',
+        deleteDocConfirm: 'Удалить этот документ? Действие нельзя отменить.',
+        deletedMsg: 'Документ удален.',
       }
     }
     return {
@@ -1299,6 +1314,8 @@ function App() {
       extractionFailedPrefix: 'Extraction failed',
       savedDraftMsg: 'Document saved as draft.',
       savedApprovedMsg: 'Document saved to history.',
+      deleteDocConfirm: 'Delete this document? This cannot be undone.',
+      deletedMsg: 'Document deleted.',
     }
   }, [language])
 
@@ -1312,10 +1329,13 @@ function App() {
         accountNumber: 'Číslo účtu',
         currency: 'Měna',
         label: 'Popisek (volitelné)',
-        remove: 'Smazat',
+        remove: '🗑',
         logo: 'Logo',
         removeLogo: 'Odstranit logo',
         companyIc: 'IČ firmy',
+        vatPayer: 'Jsme plátci DPH',
+        controlStatement: 'Podáváme kontrolní hlášení',
+        taxesDisabledHint: 'Nejste plátce DPH. V sekci Daně se skryjí podklady pro přiznání a KH.',
         save: 'Uložit účet',
         saving: 'Ukládám...',
         saved: 'Nastavení účtu uloženo.',
@@ -1330,10 +1350,17 @@ function App() {
       accountNumber: language === 'ru' ? 'Номер счета' : language === 'ger' ? 'Kontonummer' : 'Account number',
       currency: language === 'ru' ? 'Валюта' : language === 'ger' ? 'Währung' : 'Currency',
       label: language === 'ru' ? 'Метка (необязательно)' : language === 'ger' ? 'Label (optional)' : 'Label (optional)',
-      remove: language === 'ru' ? 'Удалить' : language === 'ger' ? 'Entfernen' : 'Remove',
+      remove: '🗑',
       logo: language === 'ru' ? 'Логотип' : language === 'ger' ? 'Logo' : 'Logo',
       removeLogo: language === 'ru' ? 'Удалить логотип' : language === 'ger' ? 'Logo entfernen' : 'Remove logo',
       companyIc: language === 'ru' ? 'IČ компании' : language === 'ger' ? 'Unternehmens-IC' : 'Company IC',
+      vatPayer: language === 'ru' ? 'Плательщик НДС' : language === 'ger' ? 'Wir sind MwSt.-pflichtig' : 'We are VAT payer',
+      controlStatement: language === 'ru' ? 'Подаем контрольное отчетность (KH)' : language === 'ger' ? 'Kontrollmeldung erforderlich' : 'Control statement required',
+      taxesDisabledHint: language === 'ru'
+        ? 'Если вы не плательщик НДС, раздел Налоги покажет только базовый обзор.'
+        : language === 'ger'
+          ? 'Wenn Sie kein MwSt.-Payer sind, zeigt der Bereich Steuern nur die Grundübersicht.'
+          : 'If you are not VAT payer, the Taxes section shows only a basic overview.',
       save: language === 'ru' ? 'Сохранить аккаунт' : language === 'ger' ? 'Konto speichern' : 'Save Account',
       saving: language === 'ru' ? 'Сохранение...' : language === 'ger' ? 'Speichern...' : 'Saving...',
       saved: language === 'ru' ? 'Настройки аккаунта сохранены.' : language === 'ger' ? 'Kontoeinstellungen gespeichert.' : 'Account settings saved.',
@@ -1503,6 +1530,20 @@ function App() {
   }, [theme])
 
   useEffect(() => {
+    const href = accountProfile.logoDataUrl || logoSrc
+    let icon = document.querySelector<HTMLLinkElement>("link[rel='icon']")
+    if (!icon) {
+      icon = document.createElement('link')
+      icon.rel = 'icon'
+      document.head.appendChild(icon)
+    }
+    icon.type = href.startsWith('data:image/')
+      ? href.slice('data:'.length, href.indexOf(';base64'))
+      : 'image/png'
+    icon.href = href
+  }, [accountProfile.logoDataUrl])
+
+  useEffect(() => {
     return () => {
       if (documentUploadPreviewUrl) {
         URL.revokeObjectURL(documentUploadPreviewUrl)
@@ -1561,12 +1602,16 @@ function App() {
       bankAccounts?: BankAccountOption[]
       companyIc?: string | null
       logoDataUrl: string | null
+      isVatPayer?: boolean
+      requiresControlStatement?: boolean
     }
     setAccountProfile({
       bankAccount: data.bankAccount ?? '',
       bankAccounts: Array.isArray(data.bankAccounts) ? data.bankAccounts : [],
       companyIc: data.companyIc ?? '',
       logoDataUrl: data.logoDataUrl ?? '',
+      isVatPayer: Boolean(data.isVatPayer),
+      requiresControlStatement: Boolean(data.requiresControlStatement),
     })
   }
 
@@ -1906,6 +1951,34 @@ function App() {
       setDocumentMessage(message)
     } finally {
       setDocumentSaving(false)
+    }
+  }
+
+  async function handleDocumentDelete(documentId: number) {
+    if (!token) return
+    const confirmed = window.confirm(documentsUiText.deleteDocConfirm)
+    if (!confirmed) return
+
+    setDocumentMessage('')
+    try {
+      const response = await fetch(apiUrl(`/api/documents/${documentId}`), {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { message?: string } | null
+        throw new Error(data?.message ?? 'Document delete failed')
+      }
+
+      setPreviewDocument((prev) => (prev?.id === documentId ? null : prev))
+      await loadDocuments(token, activeSubmenu === 'stored' ? 'approved' : 'draft')
+      setDocumentMessage(documentsUiText.deletedMsg)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Document delete failed'
+      setDocumentMessage(message)
     }
   }
 
@@ -2616,6 +2689,8 @@ function App() {
           bankAccounts: accountProfile.bankAccounts,
           companyIc: accountProfile.companyIc,
           logoDataUrl: accountProfile.logoDataUrl,
+          isVatPayer: accountProfile.isVatPayer,
+          requiresControlStatement: accountProfile.requiresControlStatement,
         }),
       })
 
@@ -3554,6 +3629,12 @@ function App() {
     setPreviewCustomer(null)
   }, [activeSection, activeSubmenu, customers])
 
+  useEffect(() => {
+    setDocumentMessage('')
+    setCustomerSaveMsg('')
+    setAresMessage('')
+  }, [activeSection, activeSubmenu])
+
   function handleMenuSelect(section: MenuSection) {
     const nextItem = menuItems.find((item) => item.key === section)
     if (!nextItem) {
@@ -3574,10 +3655,14 @@ function App() {
       const scopedInvoices = getScopedTaxInvoices(reportRange)
       const rateSummary = getTaxRateSummary(scopedInvoices)
       const controlSummary = getControlStatementSummary(scopedInvoices)
+      const isVatPayer = accountProfile.isVatPayer
+      const requiresControlStatement = accountProfile.isVatPayer && accountProfile.requiresControlStatement
 
       if (activeSubmenu === 'current') {
         const currentBase = scopedInvoices.reduce((sum, invoice) => sum + getInvoiceTotals(invoice).net, 0)
-        const currentVat = scopedInvoices.reduce((sum, invoice) => sum + getInvoiceTotals(invoice).vat, 0)
+        const currentVat = isVatPayer
+          ? scopedInvoices.reduce((sum, invoice) => sum + getInvoiceTotals(invoice).vat, 0)
+          : 0
 
         return (
           <section className="card">
@@ -3602,6 +3687,7 @@ function App() {
               </div>
             </div>
             <p className="meta report-ideas">{t.taxCurrentHint}</p>
+            {!isVatPayer && <p className="meta tax-note-inline">{accountUiText.taxesDisabledHint}</p>}
             <div className="report-kpi-grid">
               <div className="report-kpi-card">
                 <p className="meta-label">{t.taxBaseLabel}</p>
@@ -3632,30 +3718,32 @@ function App() {
                       </div>
                       <div className="right tax-values">
                         <p>{t.taxBaseLabel}: {row.base.toFixed(2)}</p>
-                        <p>{t.taxOutputLabel}: {row.vat.toFixed(2)}</p>
+                        <p>{t.taxOutputLabel}: {(isVatPayer ? row.vat : 0).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="report-panel">
-                <h3>{t.controlStatementSection}</h3>
-                <div className="tax-summary-list">
-                  {controlSummary.map((row) => (
-                    <div key={row.label} className="tax-summary-row">
-                      <div>
-                        <p className="customer">{row.label}</p>
-                        <p className="meta">{t.taxDocumentsLabel}: {row.count}</p>
+              {requiresControlStatement && (
+                <div className="report-panel">
+                  <h3>{t.controlStatementSection}</h3>
+                  <div className="tax-summary-list">
+                    {controlSummary.map((row) => (
+                      <div key={row.label} className="tax-summary-row">
+                        <div>
+                          <p className="customer">{row.label}</p>
+                          <p className="meta">{t.taxDocumentsLabel}: {row.count}</p>
+                        </div>
+                        <div className="right tax-values">
+                          <p>{t.taxBaseLabel}: {row.base.toFixed(2)}</p>
+                          <p>{t.vatAmountLabel}: {row.vat.toFixed(2)}</p>
+                        </div>
                       </div>
-                      <div className="right tax-values">
-                        <p>{t.taxBaseLabel}: {row.base.toFixed(2)}</p>
-                        <p>{t.vatAmountLabel}: {row.vat.toFixed(2)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <p className="tax-note">{t.controlStatementHint}</p>
                 </div>
-                <p className="tax-note">{t.controlStatementHint}</p>
-              </div>
+              )}
             </div>
             <p className="meta tax-note-inline">{t.taxDisclaimer}</p>
           </section>
@@ -3697,8 +3785,8 @@ function App() {
                 </div>
                 <div className="right">
                   <p>{t.taxBaseLabel}: {row.totalBase.toFixed(2)}</p>
-                  <p>{t.vatAmountLabel}: {row.totalVat.toFixed(2)}</p>
-                  <p className="meta">21%: {row.base21.toFixed(2)} / {row.vat21.toFixed(2)} · 12%: {row.base12.toFixed(2)} / {row.vat12.toFixed(2)} · 0%: {row.base0.toFixed(2)} / {row.vat0.toFixed(2)}</p>
+                  <p>{t.vatAmountLabel}: {(isVatPayer ? row.totalVat : 0).toFixed(2)}</p>
+                  {isVatPayer && <p className="meta">21%: {row.base21.toFixed(2)} / {row.vat21.toFixed(2)} · 12%: {row.base12.toFixed(2)} / {row.vat12.toFixed(2)} · 0%: {row.base0.toFixed(2)} / {row.vat0.toFixed(2)}</p>}
                 </div>
               </div>
             ))}
@@ -4115,7 +4203,11 @@ function App() {
               ) : (
                 <ul className="invoice-list">
                   {documents.map((doc) => (
-                    <li key={doc.id} className={previewDocument?.id === doc.id ? 'selected-list-item' : ''}>
+                    <li
+                      key={doc.id}
+                      className={previewDocument?.id === doc.id ? 'selected-list-item' : ''}
+                      onClick={() => setPreviewDocument(doc)}
+                    >
                       <div>
                         <p className="customer">{doc.supplierName || doc.fileName}</p>
                         <p className="meta">
@@ -4124,8 +4216,8 @@ function App() {
                         </p>
                         <span className={`chip ${doc.status}`}>{doc.status}</span>
                       </div>
-                      <div className="right action-stack">
-                        <button type="button" onClick={() => setPreviewDocument(doc)}>{workspaceUiText.preview}</button>
+                      <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
+                        <button className="icon-delete" type="button" onClick={() => void handleDocumentDelete(doc.id)}>{t.deleteAction}</button>
                       </div>
                     </li>
                   ))}
@@ -4171,7 +4263,7 @@ function App() {
                     placeholder={accountUiText.label}
                     onChange={(event) => updateBankAccountEntry(entry.id, 'label', event.target.value)}
                   />
-                  <button type="button" onClick={() => removeBankAccountEntry(entry.id)}>
+                  <button className="icon-delete" type="button" onClick={() => removeBankAccountEntry(entry.id)}>
                     {accountUiText.remove}
                   </button>
                 </div>
@@ -4185,6 +4277,36 @@ function App() {
                 onChange={(event) => setAccountProfile((prev) => ({ ...prev, companyIc: event.target.value }))}
                 placeholder="12345678"
               />
+            </label>
+
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={accountProfile.isVatPayer}
+                onChange={(event) =>
+                  setAccountProfile((prev) => ({
+                    ...prev,
+                    isVatPayer: event.target.checked,
+                    requiresControlStatement: event.target.checked ? prev.requiresControlStatement : false,
+                  }))
+                }
+              />
+              <span>{accountUiText.vatPayer}</span>
+            </label>
+
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={accountProfile.requiresControlStatement}
+                disabled={!accountProfile.isVatPayer}
+                onChange={(event) =>
+                  setAccountProfile((prev) => ({
+                    ...prev,
+                    requiresControlStatement: event.target.checked,
+                  }))
+                }
+              />
+              <span>{accountUiText.controlStatement}</span>
             </label>
 
             <label>
@@ -4464,7 +4586,7 @@ function App() {
                         </>
                       )
                     })()}
-                    <button type="button" onClick={() => removeInvoiceItem(index)}>
+                    <button className="icon-delete" type="button" onClick={() => removeInvoiceItem(index)}>
                       {t.deleteAction}
                     </button>
                   </div>
@@ -4524,7 +4646,7 @@ function App() {
                       <p>{formatMoney(total, currency)}</p>
                       <button type="button" onClick={() => startDraftEdit(invoice)}>{workspaceUiText.edit}</button>
                       <button type="button" onClick={() => void submitDraftToUnpaid(invoice.id)}>{workspaceUiText.save}</button>
-                      <button type="button" onClick={() => void handleInvoiceDelete(invoice.id)}>{t.deleteAction}</button>
+                      <button className="icon-delete" type="button" onClick={() => void handleInvoiceDelete(invoice.id)}>{t.deleteAction}</button>
                     </div>
                   </li>
                 )
@@ -4548,7 +4670,11 @@ function App() {
               const isOverdue =
                 Boolean(invoice.dueDate) && new Date(invoice.dueDate as string).getTime() < Date.now()
               return (
-                <li key={invoice.id} className={isOverdue ? 'overdue' : undefined}>
+                <li
+                  key={invoice.id}
+                  className={`${isOverdue ? 'overdue ' : ''}${previewInvoice?.id === invoice.id ? 'selected-list-item' : ''}`.trim()}
+                  onClick={() => setPreviewInvoice(invoice)}
+                >
                   <div>
                     <p className="customer">#{invoice.id} - {invoice.customer?.name ?? workspaceUiText.noCustomer}</p>
                     <p className={isOverdue ? 'meta overdue-date' : 'meta'}>
@@ -4557,9 +4683,8 @@ function App() {
                     <p className="meta">{workspaceUiText.taxDate}: {invoice.taxDate ? new Date(invoice.taxDate).toLocaleDateString() : '-'}</p>
                     <p className="meta">{documentsUiText.bankAccount}: {invoice.bankAccount ?? '-'}</p>
                   </div>
-                  <div className="right action-stack">
+                  <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
                     <p>{formatMoney(total, currency)}</p>
-                    <button type="button" onClick={() => setPreviewInvoice(invoice)}>{workspaceUiText.preview}</button>
                     <button type="button" onClick={() => void exportInvoicePdf(invoice)}>{t.exportPdf}</button>
                     <button type="button" onClick={() => void handleInvoiceStatusChange(invoice.id, 'paid')}>{workspaceUiText.pay}</button>
                   </div>
@@ -4587,15 +4712,18 @@ function App() {
               const total = getInvoiceTotals(invoice).gross
               const currency = getInvoiceCurrency(invoice)
               return (
-                <li key={invoice.id}>
+                <li
+                  key={invoice.id}
+                  className={previewInvoice?.id === invoice.id ? 'selected-list-item' : ''}
+                  onClick={() => setPreviewInvoice(invoice)}
+                >
                   <div>
                     <p className="customer">#{invoice.id} - {invoice.customer?.name ?? workspaceUiText.noCustomer}</p>
                     <p className="meta">{workspaceUiText.paidInvoice}</p>
                   </div>
-                  <div className="right action-stack">
+                  <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
                     <p>{formatMoney(total, currency)}</p>
                     <span className="chip paid">{statusLabels[language].paid}</span>
-                    <button type="button" onClick={() => setPreviewInvoice(invoice)}>{workspaceUiText.preview}</button>
                     <button type="button" onClick={() => void exportInvoicePdf(invoice)}>{t.exportPdf}</button>
                   </div>
                 </li>
@@ -4691,7 +4819,11 @@ function App() {
               ) : (
                 <ul className="invoice-list">
                   {customers.map((c) => (
-                    <li key={c.id} className={previewCustomer?.id === c.id ? 'selected-list-item' : ''}>
+                    <li
+                      key={c.id}
+                      className={previewCustomer?.id === c.id ? 'selected-list-item' : ''}
+                      onClick={() => setPreviewCustomer(c)}
+                    >
                       <div>
                         <p className="customer">{c.name}</p>
                         <p className="meta">
@@ -4704,9 +4836,8 @@ function App() {
                           {[c.email, c.phone].filter(Boolean).join('  ·  ')}
                         </p>
                       </div>
-                      <div className="right action-stack">
-                        <button type="button" onClick={() => setPreviewCustomer(c)}>{workspaceUiText.preview}</button>
-                        <button type="button" onClick={() => void handleDeleteCustomer(c.id)}>{t.deleteAction}</button>
+                      <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
+                        <button className="icon-delete" type="button" onClick={() => void handleDeleteCustomer(c.id)}>{t.deleteAction}</button>
                       </div>
                     </li>
                   ))}
@@ -4842,7 +4973,11 @@ function App() {
           <div className="report-two-col tax-panels">
           <ul className="invoice-list report-panel documents-panel">
             {filteredProjects.map((p) => (
-              <li key={p.id}>
+              <li
+                key={p.id}
+                className={visiblePreviewProject?.id === p.id ? 'selected-list-item' : ''}
+                onClick={() => setPreviewProject(p)}
+              >
                 <div>
                   <p className="customer">{p.name}</p>
                   <p className="meta">
@@ -4870,9 +5005,7 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="right action-stack">
-                  <button type="button" onClick={() => setPreviewProject(p)}>{workspaceUiText.preview}</button>
-                </div>
+                <div className="right action-stack" onClick={(event) => event.stopPropagation()} />
               </li>
             ))}
           </ul>
@@ -4943,7 +5076,11 @@ function App() {
           <div className="report-two-col tax-panels">
           <ul className="invoice-list report-panel documents-panel">
             {filteredProjects.map((p) => (
-              <li key={p.id}>
+              <li
+                key={p.id}
+                className={visiblePreviewProject?.id === p.id ? 'selected-list-item' : ''}
+                onClick={() => setPreviewProject(p)}
+              >
                 <div>
                   <p className="customer">{p.name}</p>
                   <p className="meta">{workspaceUiText.archivedAfterFull}</p>
@@ -4960,9 +5097,7 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="right action-stack">
-                  <button type="button" onClick={() => setPreviewProject(p)}>{workspaceUiText.preview}</button>
-                </div>
+                <div className="right action-stack" onClick={(event) => event.stopPropagation()} />
               </li>
             ))}
           </ul>
@@ -5104,7 +5239,11 @@ function App() {
           <div className="report-two-col tax-panels">
           <ul className="invoice-list report-panel documents-panel">
             {filteredOrders.map((o) => (
-              <li key={o.id}>
+              <li
+                key={o.id}
+                className={visiblePreviewOrder?.id === o.id ? 'selected-list-item' : ''}
+                onClick={() => setPreviewOrder(o)}
+              >
                 <div>
                   <p className="customer">{o.title}</p>
                   <p className="meta">{o.customer.name}</p>
@@ -5145,9 +5284,8 @@ function App() {
                     </div>
                   )}
                 </div>
-                <div className="right action-stack">
+                <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
                   <p>{o.amount ? `${o.amount.toFixed(2)} ${o.currency}` : '-'}</p>
-                  <button type="button" onClick={() => setPreviewOrder(o)}>{workspaceUiText.preview}</button>
                 </div>
               </li>
             ))}
@@ -5230,15 +5368,18 @@ function App() {
           <div className="report-two-col tax-panels">
           <ul className="invoice-list report-panel documents-panel">
             {filteredOrders.map((o) => (
-              <li key={o.id}>
+              <li
+                key={o.id}
+                className={visiblePreviewOrder?.id === o.id ? 'selected-list-item' : ''}
+                onClick={() => setPreviewOrder(o)}
+              >
                 <div>
                   <p className="customer">{o.title}</p>
                   <p className="meta">{o.customer.name}</p>
                   <p className="meta">{o.code ?? '-'}</p>
                 </div>
-                <div className="right action-stack">
+                <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
                   <p>{o.amount ? `${o.amount.toFixed(2)} ${o.currency}` : '-'}</p>
-                  <button type="button" onClick={() => setPreviewOrder(o)}>{workspaceUiText.preview}</button>
                 </div>
               </li>
             ))}
@@ -5372,7 +5513,6 @@ function App() {
           )}
         </div>
         <h1 className="hero-title">{t.title}</h1>
-        <p className="subhead">{t.subtitle}</p>
       </header>
 
       {!token && (

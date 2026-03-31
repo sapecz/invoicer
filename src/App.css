@@ -625,11 +625,36 @@
   padding: 0.75rem;
   border-radius: 0.8rem;
   background: var(--row-bg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.invoice-list li:hover {
+  border-color: var(--input-border);
+  transform: translateY(-1px);
 }
 
 .invoice-list li.overdue {
   background: color-mix(in srgb, #ffb8b8 28%, var(--row-bg));
   border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+}
+
+.invoice-list li.selected-list-item {
+  border-color: var(--button-2);
+}
+
+.icon-delete {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 0.9rem;
 }
 
 .customer {

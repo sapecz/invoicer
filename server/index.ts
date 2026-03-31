@@ -534,6 +534,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
 const updateAccountSchema = z.object({
   bankAccount: z.string().trim().max(120).optional(),
   companyIc: z.string().trim().max(30).optional(),
+  isVatPayer: z.boolean().optional(),
+  requiresControlStatement: z.boolean().optional(),
   bankAccounts: z
     .array(
       z.object({
@@ -596,6 +598,45 @@ function parseStoredBankAccounts(raw: string | null): StoredBankAccount[] {
   }]
 }
 
+function parseStoredAccountProfile(raw: string | null): {
+  bankAccounts: StoredBankAccount[]
+  isVatPayer: boolean
+  requiresControlStatement: boolean
+} {
+  const parsedAccounts = parseStoredBankAccounts(raw)
+  if (!raw) {
+    return {
+      bankAccounts: parsedAccounts,
+      isVatPayer: false,
+      requiresControlStatement: false,
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      bankAccounts?: unknown
+      isVatPayer?: unknown
+      requiresControlStatement?: unknown
+    }
+
+    if (parsed && typeof parsed === 'object' && 'bankAccounts' in parsed) {
+      return {
+        bankAccounts: normalizeStoredBankAccounts(parsed.bankAccounts),
+        isVatPayer: Boolean(parsed.isVatPayer),
+        requiresControlStatement: Boolean(parsed.requiresControlStatement),
+      }
+    }
+  } catch {
+    // Legacy mode where bankAccount column stores a plain account number string.
+  }
+
+  return {
+    bankAccounts: parsedAccounts,
+    isVatPayer: false,
+    requiresControlStatement: false,
+  }
+}
+
 const documentStatusSchema = z.enum(['draft', 'approved'])
 
 const upsertDocumentSchema = z.object({
@@ -631,16 +672,25 @@ app.get('/api/account', async (req, res) => {
     )
 
     const row = result[0] ?? { bankAccount: null, logoDataUrl: null, companyIc: null }
-    const bankAccounts = parseStoredBankAccounts(row.bankAccount)
+    const storedProfile = parseStoredAccountProfile(row.bankAccount)
     return res.json({
-      bankAccount: bankAccounts[0]?.accountNumber ?? row.bankAccount,
-      bankAccounts,
+      bankAccount: storedProfile.bankAccounts[0]?.accountNumber ?? row.bankAccount,
+      bankAccounts: storedProfile.bankAccounts,
+      isVatPayer: storedProfile.isVatPayer,
+      requiresControlStatement: storedProfile.requiresControlStatement,
       logoDataUrl: row.logoDataUrl,
       companyIc: row.companyIc,
     })
   } catch {
     // Compatibility fallback when Prisma Client is stale or columns do not exist yet.
-    return res.json({ bankAccount: null, bankAccounts: [], logoDataUrl: null, companyIc: null })
+    return res.json({
+      bankAccount: null,
+      bankAccounts: [],
+      isVatPayer: false,
+      requiresControlStatement: false,
+      logoDataUrl: null,
+      companyIc: null,
+    })
   }
 })
 
@@ -658,7 +708,11 @@ app.put('/api/account', async (req, res) => {
   try {
     const normalizedAccounts = normalizeStoredBankAccounts(parsed.data.bankAccounts ?? [])
     const fallbackAccount = parsed.data.bankAccount?.trim() || normalizedAccounts[0]?.accountNumber || null
-    const serializedBankAccounts = JSON.stringify({ bankAccounts: normalizedAccounts })
+    const serializedBankAccounts = JSON.stringify({
+      bankAccounts: normalizedAccounts,
+      isVatPayer: Boolean(parsed.data.isVatPayer),
+      requiresControlStatement: Boolean(parsed.data.isVatPayer) && Boolean(parsed.data.requiresControlStatement),
+    })
 
     await prisma.$executeRawUnsafe(
       'UPDATE User SET bankAccount = ?, logoDataUrl = ?, companyIc = ? WHERE id = ?',
@@ -671,6 +725,8 @@ app.put('/api/account', async (req, res) => {
     return res.json({
       bankAccount: fallbackAccount,
       bankAccounts: normalizedAccounts,
+      isVatPayer: Boolean(parsed.data.isVatPayer),
+      requiresControlStatement: Boolean(parsed.data.isVatPayer) && Boolean(parsed.data.requiresControlStatement),
       logoDataUrl: parsed.data.logoDataUrl || null,
       companyIc: parsed.data.companyIc || null,
     })
@@ -789,6 +845,30 @@ app.put('/api/documents/:id', async (req, res) => {
   })
 
   return res.json(document)
+})
+
+app.delete('/api/documents/:id', async (req, res) => {
+  const userId = getAuthUserId(req)
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const id = Number(req.params.id)
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ message: 'Invalid document id' })
+  }
+
+  const existing = await (prisma as any).receivedDocument.findUnique({
+    where: { id },
+    select: { id: true, userId: true },
+  })
+
+  if (!existing || existing.userId !== userId) {
+    return res.status(404).json({ message: 'Document not found' })
+  }
+
+  await (prisma as any).receivedDocument.delete({ where: { id } })
+  return res.status(204).end()
 })
 
 app.get('/api/invoices', async (req, res) => {
