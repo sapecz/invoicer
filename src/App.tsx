@@ -1464,7 +1464,7 @@ function App() {
       companyIds: language === 'ger' ? 'Unternehmensdaten' : language === 'ru' ? 'Идентификаторы компании' : 'Company IDs',
       address: language === 'ger' ? 'Adresse' : language === 'ru' ? 'Адрес' : 'Address',
       contact: language === 'ger' ? 'Kontakt' : language === 'ru' ? 'Контакт' : 'Contact',
-      paymentQr: language === 'ger' ? 'Zahlungs-QR' : language === 'ru' ? 'QR для оплаты' : 'Payment QR',
+      paymentQr: language === 'ger' ? 'Zahlungs-QR' : language === 'ru' ? 'QR dla оплаты' : 'Payment QR',
       manualItem: language === 'ger' ? 'Manuelle Position' : language === 'ru' ? 'Ручная позиция' : 'Manual item',
     }
   }, [language])
@@ -3548,7 +3548,8 @@ function App() {
       }
       setProjectForm(emptyProjectForm)
       setProjectSaveMsg(t.projectSaved)
-      await loadProjects(token)
+      // Reload active projects where new projects are created
+      await loadProjects(token, false)
     } catch (err) {
       setProjectSaveMsg(err instanceof Error ? err.message : 'Error')
     } finally {
@@ -4949,7 +4950,7 @@ function App() {
     }
 
     if (activeSection === 'projects' && activeSubmenu === 'current') {
-      const filteredProjects = projects.filter((project) => isInRangeByCreatedAt(project.createdAt, overviewRange))
+      const filteredProjects = projects.filter((project) => !project.archived && isInRangeByCreatedAt(project.createdAt, overviewRange))
       const visiblePreviewProject =
         previewProject && filteredProjects.some((project) => project.id === previewProject.id)
           ? previewProject
@@ -5052,7 +5053,7 @@ function App() {
     }
 
     if (activeSection === 'projects' && activeSubmenu === 'history') {
-      const filteredProjects = projects.filter((project) => isInRangeByCreatedAt(project.createdAt, overviewRange))
+      const filteredProjects = projects.filter((project) => project.archived && isInRangeByCreatedAt(project.createdAt, overviewRange))
       const visiblePreviewProject =
         previewProject && filteredProjects.some((project) => project.id === previewProject.id)
           ? previewProject
