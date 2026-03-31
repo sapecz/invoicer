@@ -392,7 +392,7 @@ type Translation = {
 const translations: Record<Language, Translation> = {
   en: {
     appName: 'Invoicer',
-    title: 'Invoices Backed By SQLite',
+    title: 'Invoicer',
     subtitle: 'Sign in to create and manage your personal invoices.',
     invoices: 'Invoices',
     totalAmount: 'Total Amount',
@@ -434,8 +434,8 @@ const translations: Record<Language, Translation> = {
     currentSubmenu: 'Current',
     contactsSubmenu: 'Contacts',
     storedSubmenu: 'Stored',
-    icLabel: 'IC / IÄŚO',
-    dicLabel: 'DIC / DIÄŚ',
+    icLabel: 'IC / IČO',
+    dicLabel: 'DIC / DIČ',
     companyName: 'Company Name',
     addressLabel: 'Street & Number',
     cityLabel: 'City',
@@ -540,14 +540,14 @@ const translations: Record<Language, Translation> = {
   },
   cz: {
     appName: 'Fakturace',
-    title: 'Faktury uloĹľenĂ© v SQLite',
+    title: 'Invoicer',
     subtitle: 'PĹ™ihlaste se a spravujte svĂ© osobnĂ­ faktury.',
     invoices: 'Faktury',
     totalAmount: 'CelkovĂˇ ÄŤĂˇstka',
     newInvoice: 'NovĂˇ faktura',
     storedInvoices: 'UloĹľenĂ© faktury',
     customer: 'ZĂˇkaznĂ­k',
-    amount: 'ÄŚĂˇstka',
+    amount: 'ČĂˇstka',
     status: 'Stav',
     createInvoice: 'VytvoĹ™it fakturu',
     saving: 'UklĂˇdĂˇm...',
@@ -582,12 +582,12 @@ const translations: Record<Language, Translation> = {
     currentSubmenu: 'AktuĂˇlnĂ­',
     contactsSubmenu: 'Kontakty',
     storedSubmenu: 'UloĹľeno',
-    icLabel: 'IÄŚO',
-    dicLabel: 'DIÄŚ',
+    icLabel: 'IČO',
+    dicLabel: 'DIČ',
     companyName: 'NĂˇzev firmy',
     addressLabel: 'Ulice a ÄŤĂ­slo',
     cityLabel: 'MÄ›sto',
-    zipLabel: 'PSÄŚ',
+    zipLabel: 'PSČ',
     countryLabel: 'ZemÄ›',
     phoneLabel: 'Telefon',
     lookupByIC: 'Vyhledat',
@@ -640,8 +640,8 @@ const translations: Record<Language, Translation> = {
     projectsLinked: 'NavĂˇzanĂ© projekty',
     noProjectsForSelectedCustomer: 'Pro vybranĂ©ho zĂˇkaznĂ­ka nejsou dostupnĂ© ĹľĂˇdnĂ© projekty.',
     consumptionDetailLabel: 'Detail ÄŤerpĂˇnĂ­',
-    mdConsumptionLabel: 'ÄŚerpĂˇnĂ­ MD',
-    budgetConsumptionLabel: 'ÄŚerpĂˇnĂ­ rozpoÄŤtu',
+    mdConsumptionLabel: 'ČerpĂˇnĂ­ MD',
+    budgetConsumptionLabel: 'ČerpĂˇnĂ­ rozpoÄŤtu',
     reports: 'Reporty',
     reportsOverview: 'PĹ™ehled podnikĂˇnĂ­',
     monthRevenueLabel: 'VĂ˝nos tento mÄ›sĂ­c',
@@ -659,7 +659,7 @@ const translations: Record<Language, Translation> = {
     exportCsv: 'Export CSV',
     exportPdf: 'Export PDF',
     periodRevenueLabel: 'VĂ˝nos v obdobĂ­',
-    cashflowTimeline: 'ÄŚasovĂˇ osa cashflow',
+    cashflowTimeline: 'ČasovĂˇ osa cashflow',
     paidFlowLabel: 'Uhrazeno',
     overdueFlowLabel: 'Po splatnosti',
     taxes: 'DanÄ›',
@@ -681,14 +681,14 @@ const translations: Record<Language, Translation> = {
     taxDocumentsLabel: 'Doklady',
     taxOutputLabel: 'DPH na vĂ˝stupu',
     controlStatementHint: 'Pouze podpĹŻrnĂ˝ pĹ™ehled. PĹ™esnĂ© zaĹ™azenĂ­ do kontrolnĂ­ho hlĂˇĹˇenĂ­ zĂˇvisĂ­ i na plĂˇtcovstvĂ­ a typu plnÄ›nĂ­.',
-    controlStatementA4: 'A.4 doklady nad 10 000 KÄŤ vÄŤetnÄ› DPH s ÄŤeskĂ˝m DIÄŚ odbÄ›ratele',
-    controlStatementA5: 'A.5 doklady do 10 000 KÄŤ vÄŤetnÄ› DPH s ÄŤeskĂ˝m DIÄŚ odbÄ›ratele',
-    controlStatementUnclassified: 'NezaĹ™azenĂ© nebo neĂşplnĂ© DIÄŚ Ăşdaje',
+    controlStatementA4: 'A.4 doklady nad 10 000 KÄŤ vÄŤetnÄ› DPH s ÄŤeskĂ˝m DIČ odbÄ›ratele',
+    controlStatementA5: 'A.5 doklady do 10 000 KÄŤ vÄŤetnÄ› DPH s ÄŤeskĂ˝m DIČ odbÄ›ratele',
+    controlStatementUnclassified: 'NezaĹ™azenĂ© nebo neĂşplnĂ© DIČ Ăşdaje',
     taxDisclaimer: 'OrientaÄŤnĂ­ daĹovĂ˝ podklad, ne podĂˇnĂ­ na ĂşĹ™ad.',
   },
   ger: {
     appName: 'RechnungApp',
-    title: 'Rechnungen mit SQLite',
+    title: 'Invoicer',
     subtitle: 'Melden Sie sich an, um Ihre Rechnungen zu verwalten.',
     invoices: 'Rechnungen',
     totalAmount: 'Gesamtbetrag',
@@ -836,7 +836,7 @@ const translations: Record<Language, Translation> = {
   },
   ru: {
     appName: 'ĐĐ˝Đ˛ĐľĐąŃĐµŃ€',
-    title: 'ĐˇŃ‡ĐµŃ‚Đ° Đ˛ SQLite',
+    title: 'Invoicer',
     subtitle: 'Đ’ĐľĐąĐ´Đ¸Ń‚Đµ, Ń‡Ń‚ĐľĐ±Ń‹ ŃĐżŃ€Đ°Đ˛Đ»ŃŹŃ‚ŃŚ ŃĐ˛ĐľĐ¸ĐĽĐ¸ ŃŃ‡ĐµŃ‚Đ°ĐĽĐ¸.',
     invoices: 'ĐˇŃ‡ĐµŃ‚Đ°',
     totalAmount: 'ĐžĐ±Ń‰Đ°ŃŹ ŃŃĐĽĐĽĐ°',
@@ -1174,8 +1174,8 @@ function App() {
         matchedSupplier: 'SpĂˇrovanĂ˝ dodavatel v kontaktech:',
         fileName: 'NĂˇzev souboru',
         supplier: 'Dodavatel',
-        supplierIc: 'IÄŚ dodavatele',
-        invoiceNo: 'ÄŚĂ­slo faktury',
+        supplierIc: 'IČ dodavatele',
+        invoiceNo: 'ČĂ­slo faktury',
         bankAccount: 'BankovnĂ­ ĂşÄŤet',
         variableSymbol: 'VariabilnĂ­ symbol',
         constantSymbol: 'KonstantnĂ­ symbol',
@@ -1242,7 +1242,7 @@ function App() {
         matchedSupplier: 'ĐťĐ°ĐąĐ´ĐµĐ˝ ĐżĐľŃŃ‚Đ°Đ˛Ń‰Đ¸Đş Đ˛ ĐşĐľĐ˝Ń‚Đ°ĐşŃ‚Đ°Ń…:',
         fileName: 'ĐĐĽŃŹ Ń„Đ°ĐąĐ»Đ°',
         supplier: 'ĐźĐľŃŃ‚Đ°Đ˛Ń‰Đ¸Đş',
-        supplierIc: 'IÄŚ ĐżĐľŃŃ‚Đ°Đ˛Ń‰Đ¸ĐşĐ°',
+        supplierIc: 'IČ ĐżĐľŃŃ‚Đ°Đ˛Ń‰Đ¸ĐşĐ°',
         invoiceNo: 'ĐťĐľĐĽĐµŃ€ ŃŃ‡ĐµŃ‚Đ°',
         bankAccount: 'Đ‘Đ°Đ˝ĐşĐľĐ˛ŃĐşĐ¸Đą ŃŃ‡ĐµŃ‚',
         variableSymbol: 'ĐźĐµŃ€ĐµĐĽĐµĐ˝Đ˝Ń‹Đą ŃĐ¸ĐĽĐ˛ĐľĐ»',
@@ -1309,13 +1309,13 @@ function App() {
         bankAccountsTitle: 'BankovnĂ­ ĂşÄŤty',
         addBankAccount: '+ PĹ™idat ĂşÄŤet',
         noBankAccounts: 'ZatĂ­m ĹľĂˇdnĂ˝ ĂşÄŤet. PĹ™idejte prvnĂ­ zĂˇznam.',
-        accountNumber: 'ÄŚĂ­slo ĂşÄŤtu',
+        accountNumber: 'ČĂ­slo ĂşÄŤtu',
         currency: 'MÄ›na',
         label: 'Popisek (volitelnĂ©)',
         remove: 'Smazat',
         logo: 'Logo',
         removeLogo: 'Odstranit logo',
-        companyIc: 'IÄŚ firmy',
+        companyIc: 'IČ firmy',
         save: 'UloĹľit ĂşÄŤet',
         saving: 'UklĂˇdĂˇm...',
         saved: 'NastavenĂ­ ĂşÄŤtu uloĹľeno.',
@@ -1333,7 +1333,7 @@ function App() {
       remove: language === 'ru' ? 'ĐŁĐ´Đ°Đ»Đ¸Ń‚ŃŚ' : language === 'ger' ? 'Entfernen' : 'Remove',
       logo: language === 'ru' ? 'Đ›ĐľĐłĐľŃ‚Đ¸Đż' : language === 'ger' ? 'Logo' : 'Logo',
       removeLogo: language === 'ru' ? 'ĐŁĐ´Đ°Đ»Đ¸Ń‚ŃŚ Đ»ĐľĐłĐľŃ‚Đ¸Đż' : language === 'ger' ? 'Logo entfernen' : 'Remove logo',
-      companyIc: language === 'ru' ? 'IÄŚ ĐşĐľĐĽĐżĐ°Đ˝Đ¸Đ¸' : language === 'ger' ? 'Unternehmens-IC' : 'Company IC',
+      companyIc: language === 'ru' ? 'IČ ĐşĐľĐĽĐżĐ°Đ˝Đ¸Đ¸' : language === 'ger' ? 'Unternehmens-IC' : 'Company IC',
       save: language === 'ru' ? 'ĐˇĐľŃ…Ń€Đ°Đ˝Đ¸Ń‚ŃŚ Đ°ĐşĐşĐ°ŃĐ˝Ń‚' : language === 'ger' ? 'Konto speichern' : 'Save Account',
       saving: language === 'ru' ? 'ĐˇĐľŃ…Ń€Đ°Đ˝ĐµĐ˝Đ¸Đµ...' : language === 'ger' ? 'Speichern...' : 'Saving...',
       saved: language === 'ru' ? 'ĐťĐ°ŃŃ‚Ń€ĐľĐąĐşĐ¸ Đ°ĐşĐşĐ°ŃĐ˝Ń‚Đ° ŃĐľŃ…Ń€Đ°Đ˝ĐµĐ˝Ń‹.' : language === 'ger' ? 'Kontoeinstellungen gespeichert.' : 'Account settings saved.',
@@ -2158,6 +2158,23 @@ function App() {
     setForgotPasswordMode(false)
     setAuthDevHint('')
   }
+
+  useEffect(() => {
+    if (!token) return
+    const TIMEOUT_MS = 60 * 60 * 1000
+    let timer: ReturnType<typeof setTimeout>
+    const reset = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => handleLogout(), TIMEOUT_MS)
+    }
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
+    events.forEach((e) => window.addEventListener(e, reset))
+    reset()
+    return () => {
+      clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, reset))
+    }
+  }, [token])
 
   function toggleTheme() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
@@ -4102,7 +4119,7 @@ function App() {
                       <div>
                         <p className="customer">{doc.supplierName || doc.fileName}</p>
                         <p className="meta">
-                          #{doc.invoiceNumber || '-'} â€˘ {doc.totalAmount?.toFixed(2) ?? '-'} {doc.currency} â€˘{' '}
+                          #{doc.invoiceNumber || '-'} • {doc.totalAmount?.toFixed(2) ?? '-'} {doc.currency} •{' '}
                           {doc.issueDate ? new Date(doc.issueDate).toLocaleDateString() : '-'}
                         </p>
                         <span className={`chip ${doc.status}`}>{doc.status}</span>
@@ -4678,7 +4695,7 @@ function App() {
                       <div>
                         <p className="customer">{c.name}</p>
                         <p className="meta">
-                          {[c.ic && `IÄŚO: ${c.ic}`, c.dic && `DIÄŚ: ${c.dic}`].filter(Boolean).join('  Â·  ')}
+                          {[c.ic && `IČO: ${c.ic}`, c.dic && `DIČ: ${c.dic}`].filter(Boolean).join('  ·  ')}
                         </p>
                         <p className="meta">
                           {[c.address, c.city, c.zip, c.country].filter(Boolean).join(', ')}
