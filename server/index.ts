@@ -32,6 +32,13 @@ type AuthPayload = {
   userId: number
 }
 
+type AuthContext = {
+  userId: number
+  isAdmin: boolean
+}
+
+const primaryAdminEmail = 'habatomas@gmail.com'
+
 function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
@@ -106,6 +113,38 @@ function getAuthUserId(req: express.Request): number | null {
   return getUserIdFromToken(token)
 }
 
+async function getAuthContext(req: express.Request): Promise<AuthContext | null> {
+  const userId = getAuthUserId(req)
+  if (!userId) {
+    return null
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, isAdmin: true },
+  })
+
+  if (!user) {
+    return null
+  }
+
+  return { userId: user.id, isAdmin: Boolean(user.isAdmin) }
+}
+
+function parseRequestedUserId(raw: unknown): number | null {
+  if (typeof raw !== 'string' || raw.trim() === '') return null
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+  return parsed
+}
+
+async function ensurePrimaryAdmin(): Promise<void> {
+  await prisma.user.updateMany({
+    where: { email: primaryAdminEmail },
+    data: { isAdmin: true },
+  })
+}
+
 const registerSchema = z.object({
   email: z.email().toLowerCase(),
   password: z.string().min(6),
@@ -151,6 +190,7 @@ app.post('/api/auth/register', async (req, res) => {
       email: parsed.data.email,
       displayName: parsed.data.email,
       passwordHash,
+      isAdmin: parsed.data.email === primaryAdminEmail,
       verificationCode,
       verificationCodeExpires,
       isVerified: false,
@@ -159,6 +199,7 @@ app.post('/api/auth/register', async (req, res) => {
       id: true,
       email: true,
       displayName: true,
+      isAdmin: true,
     },
   })
 
@@ -211,6 +252,7 @@ app.post('/api/auth/login', async (req, res) => {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      isAdmin: Boolean(user.isAdmin),
     },
   })
 })
@@ -295,6 +337,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
           email,
           displayName: profile.name?.trim() || email,
           passwordHash,
+          isAdmin: email === primaryAdminEmail,
           isVerified: true,
         },
       })
@@ -324,6 +367,7 @@ app.get('/api/auth/me', async (req, res) => {
       id: true,
       email: true,
       displayName: true,
+      isAdmin: true,
     },
   })
 
@@ -332,6 +376,28 @@ app.get('/api/auth/me', async (req, res) => {
   }
 
   return res.json(user)
+})
+
+app.get('/api/users', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+  if (!auth.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden' })
+  }
+
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      isAdmin: true,
+    },
+    orderBy: { email: 'asc' },
+  })
+
+  return res.json(users)
 })
 
 const verifyCodeSchema = z.object({
@@ -382,6 +448,7 @@ app.post('/api/auth/verify-code', async (req, res) => {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      isAdmin: Boolean(user.isAdmin),
     },
   })
 })
@@ -527,6 +594,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      isAdmin: Boolean(user.isAdmin),
     },
   })
 })
@@ -736,8 +804,8 @@ app.put('/api/account', async (req, res) => {
 })
 
 app.get('/api/documents', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
@@ -747,9 +815,12 @@ app.get('/api/documents', async (req, res) => {
     return res.status(400).json({ message: 'Invalid status query' })
   }
 
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
+
   const documents = await (prisma as any).receivedDocument.findMany({
     where: {
-      userId,
+      ...(scopedUserId ? { userId: scopedUserId } : {}),
       ...(parsedStatus?.success ? { status: parsedStatus.data } : {}),
     },
     orderBy: { createdAt: 'desc' },
@@ -848,8 +919,8 @@ app.put('/api/documents/:id', async (req, res) => {
 })
 
 app.delete('/api/documents/:id', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
@@ -863,7 +934,7 @@ app.delete('/api/documents/:id', async (req, res) => {
     select: { id: true, userId: true },
   })
 
-  if (!existing || existing.userId !== userId) {
+  if (!existing || (!auth.isAdmin && existing.userId !== auth.userId)) {
     return res.status(404).json({ message: 'Document not found' })
   }
 
@@ -872,14 +943,19 @@ app.delete('/api/documents/:id', async (req, res) => {
 })
 
 app.get('/api/invoices', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
   const status = (req.query.status as string) ?? 'draft'
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
   const invoices = await prisma.invoice.findMany({
-    where: { userId, status },
+    where: {
+      status,
+      ...(scopedUserId ? { userId: scopedUserId } : {}),
+    },
     include: {
       customer: true,
       items: {
@@ -1067,8 +1143,8 @@ app.put('/api/invoices/:id', async (req, res) => {
 })
 
 app.patch('/api/invoices/:id/status', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
@@ -1083,7 +1159,7 @@ app.patch('/api/invoices/:id/status', async (req, res) => {
     where: { id },
   })
 
-  if (invoice.userId !== userId) {
+  if (!auth.isAdmin && invoice.userId !== auth.userId) {
     return res.status(403).json({ message: 'Forbidden' })
   }
 
@@ -1093,14 +1169,14 @@ app.patch('/api/invoices/:id/status', async (req, res) => {
     include: { customer: true, items: { include: { project: true } } },
   })
 
-  await recomputeProjectUsage(userId)
+  await recomputeProjectUsage(invoice.userId)
 
   return res.json(updated)
 })
 
 app.delete('/api/invoices/:id', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
@@ -1109,14 +1185,15 @@ app.delete('/api/invoices/:id', async (req, res) => {
     where: { id },
   })
 
-  if (invoice.userId !== userId) {
+  if (!auth.isAdmin && invoice.userId !== auth.userId) {
     return res.status(403).json({ message: 'Forbidden' })
   }
-  if (invoice.status !== 'draft') {
+  if (!auth.isAdmin && invoice.status !== 'draft') {
     return res.status(400).json({ message: 'Only draft invoices can be deleted' })
   }
 
   await prisma.invoice.delete({ where: { id } })
+  await recomputeProjectUsage(invoice.userId)
   return res.json({ ok: true })
 })
 
@@ -1273,16 +1350,18 @@ const createOrderSchema = z.object({
 })
 
 app.get('/api/orders', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
   const archivedQuery = req.query.archived as string | undefined
   const archivedFilter = archivedQuery === 'true' ? true : archivedQuery === 'false' ? false : null
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
 
   const orders = await prisma.order.findMany({
-    where: { userId },
+    where: scopedUserId ? { userId: scopedUserId } : {},
     include: {
       customer: true,
       projects: {
@@ -1322,6 +1401,7 @@ app.get('/api/orders', async (req, res) => {
 
     return {
       id: order.id,
+      userId: order.userId,
       customerId: order.customerId,
       customer: order.customer,
       title: order.title,
@@ -1385,6 +1465,31 @@ app.post('/api/orders', async (req, res) => {
   return res.status(201).json(order)
 })
 
+app.delete('/api/orders/:id', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const id = Number(req.params.id)
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ message: 'Invalid order id' })
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id },
+    select: { id: true, userId: true },
+  })
+
+  if (!order || (!auth.isAdmin && order.userId !== auth.userId)) {
+    return res.status(404).json({ message: 'Order not found' })
+  }
+
+  await prisma.order.delete({ where: { id } })
+  await recomputeProjectUsage(order.userId)
+  return res.json({ ok: true })
+})
+
 // ---- Projects ----
 
 const createProjectSchema = z.object({
@@ -1422,15 +1527,20 @@ const createProjectSchema = z.object({
 })
 
 app.get('/api/projects', async (req, res) => {
-  const userId = getAuthUserId(req)
-  if (!userId) {
+  const auth = await getAuthContext(req)
+  if (!auth) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
   const archived = req.query.archived === 'true'
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
 
   const projects = await prisma.project.findMany({
-    where: { userId, archived },
+    where: {
+      archived,
+      ...(scopedUserId ? { userId: scopedUserId } : {}),
+    },
     include: { order: { include: { customer: true } } },
     orderBy: { name: 'asc' },
   })
@@ -1468,6 +1578,31 @@ app.post('/api/projects', async (req, res) => {
   return res.status(201).json(project)
 })
 
+app.delete('/api/projects/:id', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const id = Number(req.params.id)
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ message: 'Invalid project id' })
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id },
+    select: { id: true, userId: true },
+  })
+
+  if (!project || (!auth.isAdmin && project.userId !== auth.userId)) {
+    return res.status(404).json({ message: 'Project not found' })
+  }
+
+  await prisma.project.delete({ where: { id } })
+  await recomputeProjectUsage(project.userId)
+  return res.json({ ok: true })
+})
+
 if (isProduction) {
   const distPath = path.join(__dirname, '../dist')
   app.use(express.static(distPath))
@@ -1475,6 +1610,8 @@ if (isProduction) {
     res.sendFile(path.join(distPath, 'index.html'))
   })
 }
+
+void ensurePrimaryAdmin()
 
 app.listen(port, () => {
   console.log(`API running on ${config.appBaseUrl}`)

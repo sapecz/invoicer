@@ -52,6 +52,14 @@ type User = {
   id: number
   email: string
   displayName: string
+  isAdmin: boolean
+}
+
+type AdminUserOption = {
+  id: number
+  email: string
+  displayName: string
+  isAdmin: boolean
 }
 
 type BankAccountOption = {
@@ -98,6 +106,7 @@ type CustomerForm = {
 
 type Order = {
   id: number
+  userId: number
   customerId: number
   customer: Customer
   title: string
@@ -1002,6 +1011,9 @@ const languageLabels: Record<Language, string> = {
 
 const qrApiBaseUrl = (import.meta.env.VITE_QR_API_BASE_URL as string | undefined) ?? 'https://api.qrserver.com/v1/create-qr-code/'
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+const lightLogoPath = '/logo_light.png'
+const darkLogoPath = '/logo_dark.png'
+const defaultFaviconPath = '/favicon.png'
 
 function apiUrl(path: string): string {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path
@@ -1021,6 +1033,8 @@ function App() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [token, setToken] = useState<string>(() => localStorage.getItem('token') ?? '')
   const [user, setUser] = useState<User | null>(null)
+  const [adminUsers, setAdminUsers] = useState<AdminUserOption[]>([])
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState('')
   const [activeSection, setActiveSection] = useState<MenuSection>('invoices')
   const [activeSubmenu, setActiveSubmenu] = useState<SubmenuKey>('new')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -1110,6 +1124,7 @@ function App() {
 
   const t = translations[language]
   const isDarkTheme = theme === 'dark'
+  const brandLogoSrc = isDarkTheme ? darkLogoPath : lightLogoPath
   const isResetPasswordMode = (window.location.pathname.includes('reset-password') || Boolean(resetToken)) && !token
 
   const authUiText = useMemo(() => {
@@ -1529,8 +1544,16 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
+  function withSelectedUserFilter(path: string): string {
+    if (!user?.isAdmin || !selectedAdminUserId) {
+      return path
+    }
+    const separator = path.includes('?') ? '&' : '?'
+    return `${path}${separator}userId=${encodeURIComponent(selectedAdminUserId)}`
+  }
+
   useEffect(() => {
-    const href = accountProfile.logoDataUrl || logoSrc
+    const href = accountProfile.logoDataUrl || defaultFaviconPath
     let icon = document.querySelector<HTMLLinkElement>("link[rel='icon']")
     if (!icon) {
       icon = document.createElement('link')
@@ -1573,7 +1596,7 @@ function App() {
 
   async function loadInvoices(currentToken: string, status: string = 'draft') {
     setInvoiceError('')
-    const response = await fetch(apiUrl(`/api/invoices?status=${encodeURIComponent(status)}`), {
+    const response = await fetch(apiUrl(withSelectedUserFilter(`/api/invoices?status=${encodeURIComponent(status)}`)), {
       headers: {
         Authorization: `Bearer ${currentToken}`,
       },
@@ -1617,7 +1640,7 @@ function App() {
 
   async function loadDocuments(currentToken: string, status?: 'draft' | 'approved') {
     const query = status ? `?status=${status}` : ''
-    const response = await fetch(apiUrl(`/api/documents${query}`), {
+    const response = await fetch(apiUrl(withSelectedUserFilter(`/api/documents${query}`)), {
       headers: {
         Authorization: `Bearer ${currentToken}`,
       },
@@ -1985,6 +2008,8 @@ function App() {
   useEffect(() => {
     if (!token) {
       setUser(null)
+      setAdminUsers([])
+      setSelectedAdminUserId('')
       setInvoices([])
       return
     }
@@ -2004,6 +2029,12 @@ function App() {
 
       const me = (await meResponse.json()) as User
       setUser(me)
+      if (me.isAdmin) {
+        await loadAdminUsers(token)
+      } else {
+        setAdminUsers([])
+        setSelectedAdminUserId('')
+      }
       await loadInvoices(token)
       await loadCustomers(token)
       await loadOrders(token)
@@ -2218,6 +2249,8 @@ function App() {
     localStorage.removeItem('token')
     setToken('')
     setUser(null)
+    setAdminUsers([])
+    setSelectedAdminUserId('')
     setInvoices([])
     setCustomers([])
     setAllOrders([])
@@ -2264,7 +2297,7 @@ function App() {
       const message = err instanceof Error ? err.message : 'Unknown API error'
       setInvoiceError(message)
     })
-  }, [token, activeSection, activeSubmenu])
+  }, [token, activeSection, activeSubmenu, selectedAdminUserId, user?.isAdmin])
 
   useEffect(() => {
     if (editingInvoiceId) {
@@ -2298,7 +2331,7 @@ function App() {
       const message = err instanceof Error ? err.message : 'Unknown API error'
       setDocumentMessage(message)
     })
-  }, [token, activeSection, activeSubmenu])
+  }, [token, activeSection, activeSubmenu, selectedAdminUserId, user?.isAdmin])
 
   useEffect(() => {
     if (activeSection === 'invoices' && (activeSubmenu === 'unpaid' || activeSubmenu === 'history')) {
@@ -3258,7 +3291,7 @@ function App() {
   }
 
   async function loadProjects(currentToken: string, archived = false) {
-    const res = await fetch(apiUrl(`/api/projects?archived=${archived ? 'true' : 'false'}`), {
+    const res = await fetch(apiUrl(withSelectedUserFilter(`/api/projects?archived=${archived ? 'true' : 'false'}`)), {
       headers: { Authorization: `Bearer ${currentToken}` },
     })
     if (res.ok) {
@@ -3267,16 +3300,28 @@ function App() {
     }
   }
 
+  async function loadAdminUsers(currentToken: string) {
+    const res = await fetch(apiUrl('/api/users'), {
+      headers: { Authorization: `Bearer ${currentToken}` },
+    })
+    if (!res.ok) {
+      setAdminUsers([])
+      return
+    }
+    const data = (await res.json()) as AdminUserOption[]
+    setAdminUsers(data)
+  }
+
   async function loadReportData(currentToken: string) {
     setReportLoading(true)
     setReportError('')
     try {
       const [draftRes, unpaidRes, paidRes, ordersRes, projectsRes] = await Promise.all([
-        fetch(apiUrl('/api/invoices?status=draft'), { headers: { Authorization: `Bearer ${currentToken}` } }),
-        fetch(apiUrl('/api/invoices?status=unpaid'), { headers: { Authorization: `Bearer ${currentToken}` } }),
-        fetch(apiUrl('/api/invoices?status=paid'), { headers: { Authorization: `Bearer ${currentToken}` } }),
-        fetch(apiUrl('/api/orders'), { headers: { Authorization: `Bearer ${currentToken}` } }),
-        fetch(apiUrl('/api/projects?archived=false'), { headers: { Authorization: `Bearer ${currentToken}` } }),
+        fetch(apiUrl(withSelectedUserFilter('/api/invoices?status=draft')), { headers: { Authorization: `Bearer ${currentToken}` } }),
+        fetch(apiUrl(withSelectedUserFilter('/api/invoices?status=unpaid')), { headers: { Authorization: `Bearer ${currentToken}` } }),
+        fetch(apiUrl(withSelectedUserFilter('/api/invoices?status=paid')), { headers: { Authorization: `Bearer ${currentToken}` } }),
+        fetch(apiUrl(withSelectedUserFilter('/api/orders')), { headers: { Authorization: `Bearer ${currentToken}` } }),
+        fetch(apiUrl(withSelectedUserFilter('/api/projects?archived=false')), { headers: { Authorization: `Bearer ${currentToken}` } }),
       ])
 
       if (!draftRes.ok || !unpaidRes.ok || !paidRes.ok || !ordersRes.ok || !projectsRes.ok) {
@@ -3450,7 +3495,7 @@ function App() {
 
   async function loadOrders(currentToken: string, archived?: boolean) {
     const query = typeof archived === 'boolean' ? `?archived=${archived ? 'true' : 'false'}` : ''
-    const res = await fetch(apiUrl(`/api/orders${query}`), {
+    const res = await fetch(apiUrl(withSelectedUserFilter(`/api/orders${query}`)), {
       headers: { Authorization: `Bearer ${currentToken}` },
     })
     if (res.ok) {
@@ -3493,6 +3538,29 @@ function App() {
       setOrderSaveMsg(err instanceof Error ? err.message : 'Error')
     } finally {
       setOrderSaving(false)
+    }
+  }
+
+  async function handleDeleteOrder(orderId: number) {
+    if (!token) return
+    const confirmed = window.confirm('Delete this order? This cannot be undone.')
+    if (!confirmed) return
+
+    try {
+      const res = await fetch(apiUrl(`/api/orders/${orderId}`), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null
+        throw new Error(body?.message ?? 'Could not delete order')
+      }
+      setPreviewOrder((prev) => (prev?.id === orderId ? null : prev))
+      const archived = activeSubmenu === 'history' ? true : activeSubmenu === 'active' ? false : undefined
+      await loadOrders(token, archived)
+      setOrderSaveMsg('Order deleted.')
+    } catch (err) {
+      setOrderSaveMsg(err instanceof Error ? err.message : 'Error')
     }
   }
 
@@ -3558,6 +3626,29 @@ function App() {
     }
   }
 
+  async function handleDeleteProject(projectId: number) {
+    if (!token) return
+    const confirmed = window.confirm('Delete this project? This cannot be undone.')
+    if (!confirmed) return
+
+    try {
+      const res = await fetch(apiUrl(`/api/projects/${projectId}`), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null
+        throw new Error(body?.message ?? 'Could not delete project')
+      }
+      setPreviewProject((prev) => (prev?.id === projectId ? null : prev))
+      const archived = activeSubmenu === 'history'
+      await loadProjects(token, archived)
+      setProjectSaveMsg('Project deleted.')
+    } catch (err) {
+      setProjectSaveMsg(err instanceof Error ? err.message : 'Error')
+    }
+  }
+
   useEffect(() => {
     if (!token || activeSection !== 'projects') {
       return
@@ -3569,7 +3660,7 @@ function App() {
       setProjectSaveMsg(message)
     })
     void loadOrders(token).catch(() => undefined)
-  }, [token, activeSection, activeSubmenu])
+  }, [token, activeSection, activeSubmenu, selectedAdminUserId, user?.isAdmin])
 
   useEffect(() => {
     if (!token || activeSection !== 'orders') {
@@ -3590,7 +3681,7 @@ function App() {
     }
 
     void loadReportData(token)
-  }, [token, activeSection])
+  }, [token, activeSection, selectedAdminUserId, user?.isAdmin])
 
   useEffect(() => {
     if (activeSection === 'orders' && (activeSubmenu === 'active' || activeSubmenu === 'history')) {
@@ -5007,7 +5098,9 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="right action-stack" onClick={(event) => event.stopPropagation()} />
+                <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
+                  <button className="icon-delete" type="button" onClick={() => void handleDeleteProject(p.id)}>{t.deleteAction}</button>
+                </div>
               </li>
             ))}
           </ul>
@@ -5099,7 +5192,9 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="right action-stack" onClick={(event) => event.stopPropagation()} />
+                <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
+                  <button className="icon-delete" type="button" onClick={() => void handleDeleteProject(p.id)}>{t.deleteAction}</button>
+                </div>
               </li>
             ))}
           </ul>
@@ -5288,6 +5383,7 @@ function App() {
                 </div>
                 <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
                   <p>{o.amount ? `${o.amount.toFixed(2)} ${o.currency}` : '-'}</p>
+                  <button className="icon-delete" type="button" onClick={() => void handleDeleteOrder(o.id)}>{t.deleteAction}</button>
                 </div>
               </li>
             ))}
@@ -5382,6 +5478,7 @@ function App() {
                 </div>
                 <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
                   <p>{o.amount ? `${o.amount.toFixed(2)} ${o.currency}` : '-'}</p>
+                  <button className="icon-delete" type="button" onClick={() => void handleDeleteOrder(o.id)}>{t.deleteAction}</button>
                 </div>
               </li>
             ))}
@@ -5430,7 +5527,7 @@ function App() {
     <main className="app-shell">
       <header className="hero">
         <div className="toolbar">
-          <img src={logoSrc} alt="Invoicer" className="brand-logo-hero" />
+          <img src={brandLogoSrc} alt="Invoicer" className="brand-logo-hero" onError={(event) => { event.currentTarget.src = logoSrc }} />
           {token && (
             <div className="settings-wrap">
               <button
@@ -5466,6 +5563,22 @@ function App() {
                       ))}
                     </select>
                   </label>
+                  {user?.isAdmin && (
+                    <label>
+                      User filter
+                      <select
+                        value={selectedAdminUserId}
+                        onChange={(event) => setSelectedAdminUserId(event.target.value)}
+                      >
+                        <option value="">All users</option>
+                        {adminUsers.map((adminUser) => (
+                          <option key={adminUser.id} value={String(adminUser.id)}>
+                            {adminUser.email}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <div className="theme-switch-row">
                     <span>{t.chooseTheme}</span>
                     <button
@@ -5520,7 +5633,7 @@ function App() {
       {!token && (
         <section className="card auth-card">
           <div className="auth-logo-wrap">
-            <img src={logoSrc} alt="Invoicer" className="brand-logo-auth" />
+            <img src={brandLogoSrc} alt="Invoicer" className="brand-logo-auth" onError={(event) => { event.currentTarget.src = logoSrc }} />
           </div>
           {isResetPasswordMode ? (
             <>
@@ -5723,7 +5836,7 @@ function App() {
       {token && (
         <section className="workspace-shell">
           <aside className="card side-menu">
-            <img src={logoSrc} alt="Invoicer" className="brand-logo-sidebar" />
+            <img src={brandLogoSrc} alt="Invoicer" className="brand-logo-sidebar" onError={(event) => { event.currentTarget.src = logoSrc }} />
             {menuItems.map((item) => (
               <div key={item.key} className="menu-group">
                 <button
