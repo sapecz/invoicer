@@ -1010,7 +1010,12 @@ const languageLabels: Record<Language, string> = {
 }
 
 const qrApiBaseUrl = (import.meta.env.VITE_QR_API_BASE_URL as string | undefined) ?? 'https://api.qrserver.com/v1/create-qr-code/'
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? ''
+const inferredApiBaseUrl =
+  typeof window !== 'undefined' && window.location.hostname === 'invoicer.primetech.cz'
+    ? 'https://invoicer-api-8qkl.onrender.com'
+    : ''
+const apiBaseUrl = configuredApiBaseUrl || inferredApiBaseUrl
 const lightLogoPath = '/logo_light.png'
 const darkLogoPath = '/logo_dark.png'
 const defaultFaviconPath = '/favicon.png'
