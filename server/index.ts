@@ -138,13 +138,6 @@ function parseRequestedUserId(raw: unknown): number | null {
   return parsed
 }
 
-async function ensurePrimaryAdmin(): Promise<void> {
-  await prisma.user.updateMany({
-    where: { email: primaryAdminEmail },
-    data: { isAdmin: true },
-  })
-}
-
 const registerSchema = z.object({
   email: z.email().toLowerCase(),
   password: z.string().min(6),
@@ -1610,8 +1603,6 @@ if (isProduction) {
     res.sendFile(path.join(distPath, 'index.html'))
   })
 }
-
-void ensurePrimaryAdmin()
 
 app.listen(port, () => {
   console.log(`API running on ${config.appBaseUrl}`)
