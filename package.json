@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "start": "node dist-server/index.js",
+    "deploy": "node scripts/baseline.mjs && npx prisma migrate deploy && npm run start",
     "lint": "eslint .",
     "preview": "vite preview"
   },
