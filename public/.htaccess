@@ -14,6 +14,10 @@
   RewriteEngine On
   RewriteBase /
 
+  # Force canonical HTTPS to avoid mixed http/https caches and redirects
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
   # Keep API requests untouched (if proxied separately)
   RewriteRule ^api/ - [L]
 

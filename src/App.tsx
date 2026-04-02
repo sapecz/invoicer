@@ -5873,7 +5873,7 @@ function App() {
           <section className="workspace-main">{renderSectionContent()}</section>
         </section>
       )}
-      <footer className="app-version">Verze 0.12</footer>
+      <footer className="app-version">Verze 0.13</footer>
     </main>
   )
 }
