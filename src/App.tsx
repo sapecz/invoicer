@@ -1016,8 +1016,9 @@ const inferredApiBaseUrl =
     ? 'https://invoicer-api-8qkl.onrender.com'
     : ''
 const apiBaseUrl = configuredApiBaseUrl || inferredApiBaseUrl
-const lightLogoPath = '/logo_light.png'
-const darkLogoPath = '/logo_dark.png'
+const staticAssetVersion = '20260402'
+const lightLogoPath = `/logo_light.png?v=${staticAssetVersion}`
+const darkLogoPath = `/logo_dark.png?v=${staticAssetVersion}`
 const defaultFaviconPath = '/favicon.png'
 
 function apiUrl(path: string): string {
