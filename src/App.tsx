@@ -6,7 +6,7 @@ import './App.css'
 
 type Language = 'en' | 'cz' | 'ger' | 'ru'
 type Theme = 'light' | 'dark'
-type MenuSection = 'invoices' | 'orders' | 'projects' | 'customers' | 'documents' | 'warehouse' | 'account' | 'taxes' | 'reports'
+type MenuSection = 'invoices' | 'orders' | 'projects' | 'customers' | 'documents' | 'warehouse' | 'account' | 'taxes' | 'reports' | 'admin'
 type SubmenuKey =
   | 'new'
   | 'unpaid'
@@ -19,6 +19,7 @@ type SubmenuKey =
   | 'warehouseMove'
   | 'warehouseStock'
   | 'warehouseHistory'
+  | 'accountManagement'
 type PeriodRange = 'month' | 'quarter' | 'year' | 'all'
 type CzechVatOption = '21' | '12' | '0'
 
@@ -71,6 +72,8 @@ type AdminUserOption = {
   email: string
   displayName: string
   isAdmin: boolean
+  isBlocked: boolean
+  createdAt: string
 }
 
 type BankAccountOption = {
@@ -1201,6 +1204,11 @@ function App() {
   const [stockSavingItem, setStockSavingItem] = useState(false)
   const [stockSavingMovement, setStockSavingMovement] = useState(false)
   const [stockMessage, setStockMessage] = useState('')
+  const [adminActionInProgress, setAdminActionInProgress] = useState<'delete' | 'block' | 'reset' | null>(null)
+  const [adminActionUserId, setAdminActionUserId] = useState<number | null>(null)
+  const [adminActionConfirm, setAdminActionConfirm] = useState(false)
+  const [adminActionLoading, setAdminActionLoading] = useState(false)
+  const [adminMessage, setAdminMessage] = useState('')
   const [reportInvoices, setReportInvoices] = useState<Invoice[]>([])
   const [reportOrders, setReportOrders] = useState<Order[]>([])
   const [reportProjects, setReportProjects] = useState<Project[]>([])
@@ -1817,6 +1825,7 @@ function App() {
     warehouseMove: warehouseUiText.newMovement,
     warehouseStock: warehouseUiText.stockState,
     warehouseHistory: warehouseUiText.history,
+    accountManagement: language === 'cz' ? 'Správa účtů' : language === 'ger' ? 'Kontenverwaltung' : language === 'ru' ? 'Управление учетными записями' : 'Account Management',
   }
 
   const menuItems: Array<{ key: MenuSection; label: string; submenus: SubmenuKey[] }> = [
@@ -1828,6 +1837,7 @@ function App() {
     { key: 'warehouse', label: warehouseUiText.menu, submenus: ['warehouseItems', 'warehouseMove', 'warehouseStock', 'warehouseHistory'] },
     { key: 'taxes', label: t.taxes, submenus: ['current', 'history'] },
     { key: 'reports', label: t.reports, submenus: ['current'] },
+    ...(user?.isAdmin ? [{ key: 'admin' as MenuSection, label: language === 'cz' ? 'Administrace' : language === 'ger' ? 'Verwaltung' : language === 'ru' ? 'Администрирование' : 'Admin', submenus: ['accountManagement' as SubmenuKey] }] : []),
   ]
 
   const activeItem = menuItems.find((item) => item.key === activeSection)
@@ -3176,6 +3186,98 @@ function App() {
     }
   }
 
+  async function handleAdminDeleteUser(userId: number) {
+    if (!token) return
+    setAdminActionLoading(true)
+    setAdminMessage('')
+    try {
+      const response = await fetch(apiUrl(`/api/admin/users/${userId}`), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ confirm: true }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      setAdminMessage(language === 'cz' ? 'Uživatel byl smazán.' : 'User deleted.')
+      await loadAdminUsers(token)
+      setAdminActionInProgress(null)
+      setAdminActionUserId(null)
+      setAdminActionConfirm(false)
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setAdminActionLoading(false)
+    }
+  }
+
+  async function handleAdminBlockUser(userId: number, blocked: boolean) {
+    if (!token) return
+    setAdminActionLoading(true)
+    setAdminMessage('')
+    try {
+      const response = await fetch(apiUrl(`/api/admin/users/${userId}/block`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ blocked, confirm: true }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      setAdminMessage(language === 'cz' ? 'Stav uživatele byl změněn.' : 'User status updated.')
+      await loadAdminUsers(token)
+      setAdminActionInProgress(null)
+      setAdminActionUserId(null)
+      setAdminActionConfirm(false)
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setAdminActionLoading(false)
+    }
+  }
+
+  async function handleAdminResetPassword(userId: number) {
+    if (!token) return
+    setAdminActionLoading(true)
+    setAdminMessage('')
+    try {
+      const response = await fetch(apiUrl(`/api/admin/users/${userId}/reset-password`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ confirm: true }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      setAdminMessage(language === 'cz' ? 'Email pro resetování hesla byl odeslán.' : 'Password reset email sent.')
+      setAdminActionInProgress(null)
+      setAdminActionUserId(null)
+      setAdminActionConfirm(false)
+    } catch (err) {
+      setAdminMessage(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setAdminActionLoading(false)
+    }
+  }
+
   function handleGoogleLogin() {
     window.location.href = apiUrl('/api/auth/google/start')
   }
@@ -3866,7 +3968,7 @@ function App() {
   }
 
   async function loadAdminUsers(currentToken: string) {
-    const res = await fetch(apiUrl('/api/users'), {
+    const res = await fetch(apiUrl('/api/admin/users'), {
       headers: { Authorization: `Bearer ${currentToken}` },
     })
     if (!res.ok) {
@@ -5031,6 +5133,163 @@ function App() {
           </form>
 
           {accountMessage && <p className="error">{accountMessage}</p>}
+        </section>
+      )
+    }
+
+    if (activeSection === 'admin' && activeSubmenu === 'accountManagement') {
+      return (
+        <section className="card">
+          <h2>{language === 'cz' ? 'Správa účtů' : language === 'ger' ? 'Kontenverwaltung' : language === 'ru' ? 'Управление учетными записями' : 'Account Management'}</h2>
+          
+          {adminMessage && (
+            <p className={adminMessage.includes('Error') || adminMessage.includes('Could not') ? 'error' : 'success'}>
+              {adminMessage}
+            </p>
+          )}
+
+          <div className="report-panel documents-panel">
+            {adminUsers.length === 0 ? (
+              <p className="empty">{language === 'cz' ? 'Žádní uživatelé' : 'No users found.'}</p>
+            ) : (
+              <table className="users-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #ccc' }}>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>Email</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Jméno' : 'Name'}</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Admin' : 'Admin'}</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Blokován' : 'Blocked'}</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Akce' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminUsers.map((adminUser) => (
+                    <tr key={adminUser.id} style={{ borderBottom: '1px solid #eee', position: 'relative' }}>
+                      <td style={{ padding: '10px' }}>{adminUser.email}</td>
+                      <td style={{ padding: '10px' }}>{adminUser.displayName}</td>
+                      <td style={{ padding: '10px' }}>{adminUser.isAdmin ? '✓' : '-'}</td>
+                      <td style={{ padding: '10px' }}>{adminUser.isBlocked ? '✓' : '-'}</td>
+                      <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
+                        <button
+                          type="button"
+                          className="icon-delete"
+                          onClick={() => {
+                            setAdminActionInProgress('delete')
+                            setAdminActionUserId(adminUser.id)
+                            setAdminActionConfirm(false)
+                          }}
+                          disabled={adminActionUserId === adminUser.id}
+                          title={language === 'cz' ? 'Smazat uživatele' : 'Delete user'}
+                        >
+                          {language === 'cz' ? 'Smazat' : 'Delete'}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-delete"
+                          onClick={() => {
+                            setAdminActionInProgress('block')
+                            setAdminActionUserId(adminUser.id)
+                            setAdminActionConfirm(false)
+                          }}
+                          disabled={adminActionUserId === adminUser.id}
+                          title={language === 'cz' ? 'Blokovat/odblokovat' : 'Block/unblock'}
+                          style={{ marginLeft: '5px' }}
+                        >
+                          {adminUser.isBlocked ? (language === 'cz' ? 'Odblokovat' : 'Unblock') : (language === 'cz' ? 'Blokovat' : 'Block')}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-delete"
+                          onClick={() => {
+                            setAdminActionInProgress('reset')
+                            setAdminActionUserId(adminUser.id)
+                            setAdminActionConfirm(false)
+                          }}
+                          disabled={adminActionUserId === adminUser.id}
+                          title={language === 'cz' ? 'Resetovat heslo' : 'Reset password'}
+                          style={{ marginLeft: '5px' }}
+                        >
+                          {language === 'cz' ? 'Resetovat' : 'Reset'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {adminActionInProgress && adminActionUserId && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+            }}>
+              <div style={{
+                backgroundColor: 'white',
+                padding: '20px',
+                borderRadius: '8px',
+                maxWidth: '400px',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+              }}>
+                <h3>{language === 'cz' ? 'Potvrzení' : 'Confirm'}</h3>
+                <p>
+                  {adminActionInProgress === 'delete' && (language === 'cz' ? 'Opravdu chcete smazat tohoto uživatele? Tuto akci nelze vrátit.' : 'Are you sure you want to delete this user? This action cannot be undone.')}
+                  {adminActionInProgress === 'block' && (language === 'cz' ? 'Opravdu chcete změnit stav blokování tohoto uživatele?' : 'Are you sure you want to block/unblock this user?')}
+                  {adminActionInProgress === 'reset' && (language === 'cz' ? 'Opravdu chcete odeslat email pro resetování hesla?' : 'Are you sure you want to send a password reset email?')}
+                </p>
+                <label style={{ display: 'block', marginTop: '10px' }}>
+                  <input
+                    type="checkbox"
+                    checked={adminActionConfirm}
+                    onChange={(e) => setAdminActionConfirm(e.target.checked)}
+                  />
+                  <span style={{ marginLeft: '5px' }}>
+                    {language === 'cz' ? 'Potvrzuji' : 'I confirm'}
+                  </span>
+                </label>
+                <div style={{ marginTop: '15px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminActionInProgress(null)
+                      setAdminActionUserId(null)
+                      setAdminActionConfirm(false)
+                    }}
+                    disabled={adminActionLoading}
+                  >
+                    {language === 'cz' ? 'Zrušit' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      if (adminActionConfirm && adminActionUserId) {
+                        if (adminActionInProgress === 'delete') {
+                          void handleAdminDeleteUser(adminActionUserId)
+                        } else if (adminActionInProgress === 'block') {
+                          const adminUser = adminUsers.find((u) => u.id === adminActionUserId)
+                          void handleAdminBlockUser(adminActionUserId, !adminUser?.isBlocked)
+                        } else if (adminActionInProgress === 'reset') {
+                          void handleAdminResetPassword(adminActionUserId)
+                        }
+                      }
+                    }}
+                    disabled={!adminActionConfirm || adminActionLoading}
+                  >
+                    {adminActionLoading ? (language === 'cz' ? 'Probíhá...' : 'Loading...') : (language === 'cz' ? 'Potvrďte' : 'Confirm')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       )
     }

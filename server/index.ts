@@ -19,6 +19,9 @@ const mailgunDomain = config.mailgun.domain
 const mailgunApiKey = config.mailgun.apiKey
 const mailgunApiBaseUrl = config.mailgun.apiBaseUrl
 const mailgunFromEmail = config.mailgun.fromEmail
+const brevoApiKey = config.brevo.apiKey
+const brevoFromEmail = config.brevo.fromEmail
+const brevoFromName = config.brevo.fromName
 const frontendUrl = config.frontendUrl
 const googleClientId = config.auth.googleClientId
 const googleClientSecret = config.auth.googleClientSecret
@@ -49,11 +52,50 @@ function generateResetToken(): string {
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (!mailgunDomain || !mailgunApiKey) {
-    console.warn('Mailgun is not configured. Skipping email send.')
+  if (brevoApiKey) {
+    return sendEmailBrevo(to, subject, html)
+  } else if (mailgunDomain && mailgunApiKey) {
+    return sendEmailMailgun(to, subject, html)
+  } else {
+    console.warn('Neither Brevo nor Mailgun is configured. Skipping email send.')
     return false
   }
+}
 
+async function sendEmailBrevo(to: string, subject: string, html: string): Promise<boolean> {
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'api-key': brevoApiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: brevoFromName, email: brevoFromEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      console.error('Brevo send failed', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+      })
+    }
+
+    return response.ok
+  } catch (error) {
+    console.error('Brevo email send failed:', error)
+    return false
+  }
+}
+
+async function sendEmailMailgun(to: string, subject: string, html: string): Promise<boolean> {
   try {
     const fromAddress = mailgunFromEmail || `noreply@${mailgunDomain}`
     const body = new URLSearchParams({
@@ -83,7 +125,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
 
     return response.ok
   } catch (error) {
-    console.error('Email send failed:', error)
+    console.error('Mailgun email send failed:', error)
     return false
   }
 }
@@ -1940,6 +1982,168 @@ app.get('/api/stock/alerts', async (req, res) => {
       return res.json([])
     }
     return res.status(500).json({ message: 'Could not load stock alerts' })
+  }
+})
+
+// ---- Admin ----
+
+app.get('/api/admin/users', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth?.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: admin access required' })
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        isAdmin: true,
+        isBlocked: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return res.json(users)
+  } catch (error) {
+    return res.status(500).json({ message: 'Could not load users' })
+  }
+})
+
+app.delete('/api/admin/users/:id', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth?.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: admin access required' })
+  }
+
+  const userId = parseInt(req.params.id)
+  const { confirm } = req.body as { confirm?: boolean }
+
+  if (!confirm) {
+    return res.status(400).json({ message: 'Confirmation required' })
+  }
+
+  try {
+    // Prevent deleting yourself
+    if (userId === auth.userId) {
+      return res.status(400).json({ message: 'Cannot delete your own account' })
+    }
+
+    // Delete user (cascading deletes should handle related data)
+    await prisma.user.delete({
+      where: { id: userId },
+    })
+
+    return res.json({ message: 'User deleted successfully' })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    return res.status(500).json({ message: 'Could not delete user' })
+  }
+})
+
+app.post('/api/admin/users/:id/block', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth?.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: admin access required' })
+  }
+
+  const userId = parseInt(req.params.id)
+  const { blocked, confirm } = req.body as { blocked?: boolean; confirm?: boolean }
+
+  if (!confirm) {
+    return res.status(400).json({ message: 'Confirmation required' })
+  }
+
+  try {
+    // Prevent blocking yourself
+    if (userId === auth.userId) {
+      return res.status(400).json({ message: 'Cannot block your own account' })
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { isBlocked: blocked ?? true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        isAdmin: true,
+        isBlocked: true,
+      },
+    })
+
+    return res.json(updatedUser)
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    return res.status(500).json({ message: 'Could not block user' })
+  }
+})
+
+app.post('/api/admin/users/:id/reset-password', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth?.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden: admin access required' })
+  }
+
+  const userId = parseInt(req.params.id)
+  const { confirm } = req.body as { confirm?: boolean }
+
+  if (!confirm) {
+    return res.status(400).json({ message: 'Confirmation required' })
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, displayName: true },
+    })
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    // Generate reset token
+    const resetToken = Math.random().toString(36).slice(2, 15)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        resetToken,
+        resetTokenExpires: expiresAt,
+      },
+    })
+
+    // Build reset link
+    const baseUrl = req.headers['x-forwarded-proto']
+      ? `${req.headers['x-forwarded-proto']}://${req.headers.host}`
+      : `http://localhost:${port}`
+    const resetLink = `${baseUrl}/?resetToken=${resetToken}`
+
+    // Send reset email
+    const htmlContent = `
+      <h2>Password Reset Request</h2>
+      <p>Click the link below to reset your password:</p>
+      <p><a href="${resetLink}" style="background-color: #007BFF; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a></p>
+      <p>Or copy this link: ${resetLink}</p>
+      <p>This link expires in 24 hours.</p>
+    `
+
+    const emailSent = await sendEmail(user.email, 'Password Reset Request', htmlContent)
+
+    if (!emailSent) {
+      return res.status(500).json({ message: 'User found but email could not be sent' })
+    }
+
+    return res.json({ message: 'Password reset email sent successfully' })
+  } catch (error) {
+    return res.status(500).json({ message: 'Could not send reset email' })
   }
 })
 

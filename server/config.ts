@@ -32,6 +32,11 @@ export const config = {
     apiBaseUrl: process.env.MAILGUN_API_BASE_URL ?? 'https://api.mailgun.net',
     fromEmail: process.env.MAILGUN_FROM_EMAIL ?? '',
   },
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY ?? '',
+    fromEmail: process.env.BREVO_FROM_EMAIL ?? '',
+    fromName: process.env.BREVO_FROM_NAME ?? 'Invoicer',
+  },
   integrations: {
     aresBaseUrl:
       process.env.ARES_API_BASE_URL ??
