@@ -329,21 +329,38 @@ app.get('/api/auth/google/callback', async (req, res) => {
       return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent('Google email is not verified')}`)
     }
 
-    const passwordHash = await bcrypt.hash(generateResetToken(), 10)
-    const user = await prisma.user.upsert({
-      where: { email },
-      create: {
-        email,
-        displayName: profile.name?.trim() || email,
-        passwordHash,
-        isAdmin: email === primaryAdminEmail,
-        isVerified: true,
-      },
-      update: {
-        displayName: profile.name?.trim() || email,
-        isVerified: true,
-      },
-    })
+    let user = await prisma.user.findUnique({ where: { email } })
+    if (!user) {
+      const passwordHash = await bcrypt.hash(generateResetToken(), 10)
+      try {
+        user = await prisma.user.create({
+          data: {
+            email,
+            displayName: profile.name?.trim() || email,
+            passwordHash,
+            isAdmin: email === primaryAdminEmail,
+            isVerified: true,
+          },
+        })
+      } catch {
+        // Race-safe fallback when account was created in parallel request.
+        user = await prisma.user.findUnique({ where: { email } })
+      }
+    }
+
+    if (!user) {
+      return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent('Google account could not be created')}`)
+    }
+
+    if (!user.isVerified || user.displayName !== (profile.name?.trim() || email)) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          displayName: profile.name?.trim() || email,
+          isVerified: true,
+        },
+      })
+    }
 
     const token = createAuthToken(user.id)
     return res.redirect(`${frontendUrl}/?google_token=${encodeURIComponent(token)}`)
