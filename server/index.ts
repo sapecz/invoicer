@@ -313,38 +313,44 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
     const profile = (await profileResponse.json()) as {
       email?: string
-      email_verified?: boolean
+      email_verified?: boolean | string
+      verified_email?: boolean | string
       name?: string
     }
 
     const email = profile.email?.toLowerCase().trim()
-    if (!email || !profile.email_verified) {
+    const emailVerified =
+      profile.email_verified === true ||
+      profile.email_verified === 'true' ||
+      profile.verified_email === true ||
+      profile.verified_email === 'true'
+
+    if (!email || !emailVerified) {
       return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent('Google email is not verified')}`)
     }
 
-    let user = await prisma.user.findUnique({ where: { email } })
-    if (!user) {
-      const passwordHash = await bcrypt.hash(generateResetToken(), 10)
-      user = await prisma.user.create({
-        data: {
-          email,
-          displayName: profile.name?.trim() || email,
-          passwordHash,
-          isAdmin: email === primaryAdminEmail,
-          isVerified: true,
-        },
-      })
-    } else if (!user.isVerified) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { isVerified: true },
-      })
-    }
+    const passwordHash = await bcrypt.hash(generateResetToken(), 10)
+    const user = await prisma.user.upsert({
+      where: { email },
+      create: {
+        email,
+        displayName: profile.name?.trim() || email,
+        passwordHash,
+        isAdmin: email === primaryAdminEmail,
+        isVerified: true,
+      },
+      update: {
+        displayName: profile.name?.trim() || email,
+        isVerified: true,
+      },
+    })
 
     const token = createAuthToken(user.id)
     return res.redirect(`${frontendUrl}/?google_token=${encodeURIComponent(token)}`)
-  } catch {
-    return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent('Google login failed')}`)
+  } catch (error) {
+    const details = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Google callback failed:', error)
+    return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent(`Google login failed: ${details}`)}`)
   }
 })
 
