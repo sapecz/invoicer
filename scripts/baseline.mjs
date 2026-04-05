@@ -5,6 +5,10 @@
  */
 import { execSync } from 'child_process'
 
+if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
+  process.env.DIRECT_URL = process.env.DATABASE_URL
+}
+
 const migrations = [
   '20260328164321_init',
   '20260328164931_add_users_auth',
@@ -20,6 +24,8 @@ const migrations = [
   '20260329101905_add_document_payment_fields',
   '20260329123000_add_user_company_ic',
   '20260401000100_add_admin_flag',
+  '20260405143000_add_stock_management',
+  '20260405200000_add_user_blocked',
 ]
 
 function tryResolve(mode, migration) {

@@ -64,6 +64,34 @@ GOOGLE_REDIRECT_URI=http://localhost:3011/api/auth/google/callback
 
 Also add the same callback URL to your Google OAuth app configuration.
 
+## Render + Supabase Production Setup
+
+If your API runs on Render and PostgreSQL runs on Supabase, this setup is supported.
+
+Required environment variables in Render:
+
+```bash
+DATABASE_URL=...
+DIRECT_URL=...
+```
+
+- `DATABASE_URL`: your normal Prisma connection string.
+- `DIRECT_URL`: direct PostgreSQL connection (for migrations). If omitted, deploy scripts now fallback to `DATABASE_URL`.
+
+Recommended Render Start Command:
+
+```bash
+npm run deploy
+```
+
+`npm run deploy` will:
+
+1. Baseline historical migrations (safe to repeat)
+2. Run `prisma migrate deploy`
+3. Start the API server
+
+This prevents runtime errors like missing columns after new releases.
+
 ## API Endpoints
 
 - `GET /api/health`
