@@ -19,7 +19,6 @@ type SubmenuKey =
   | 'warehouseMove'
   | 'warehouseStock'
   | 'warehouseHistory'
-  | 'warehouseAlerts'
 type PeriodRange = 'month' | 'quarter' | 'year' | 'all'
 type CzechVatOption = '21' | '12' | '0'
 
@@ -1660,6 +1659,7 @@ function App() {
         itemSaved: 'Položka uložena.',
         activate: 'Aktivovat',
         deactivate: 'Deaktivovat',
+        lowStockHint: 'Položka je pod minimálním množstvím',
       }
     }
 
@@ -1703,6 +1703,7 @@ function App() {
         itemSaved: 'Artikel gespeichert.',
         activate: 'Aktivieren',
         deactivate: 'Deaktivieren',
+        lowStockHint: 'Artikel liegt unter der Mindestmenge',
       }
     }
 
@@ -1746,6 +1747,7 @@ function App() {
         itemSaved: 'Позиция сохранена.',
         activate: 'Активировать',
         deactivate: 'Деактивировать',
+        lowStockHint: 'Позиция ниже минимального остатка',
       }
     }
 
@@ -1788,6 +1790,7 @@ function App() {
       itemSaved: 'Item saved.',
       activate: 'Activate',
       deactivate: 'Deactivate',
+      lowStockHint: 'Item is below minimum quantity',
     }
   }, [language])
 
@@ -1803,7 +1806,6 @@ function App() {
     warehouseMove: warehouseUiText.newMovement,
     warehouseStock: warehouseUiText.stockState,
     warehouseHistory: warehouseUiText.history,
-    warehouseAlerts: warehouseUiText.alerts,
   }
 
   const menuItems: Array<{ key: MenuSection; label: string; submenus: SubmenuKey[] }> = [
@@ -1812,7 +1814,7 @@ function App() {
     { key: 'projects', label: t.projects, submenus: ['new', 'current', 'history'] },
     { key: 'customers', label: t.customers, submenus: ['new', 'contacts'] },
     { key: 'documents', label: t.documents, submenus: ['new', 'stored'] },
-    { key: 'warehouse', label: warehouseUiText.menu, submenus: ['warehouseItems', 'warehouseMove', 'warehouseStock', 'warehouseHistory', 'warehouseAlerts'] },
+    { key: 'warehouse', label: warehouseUiText.menu, submenus: ['warehouseItems', 'warehouseMove', 'warehouseStock', 'warehouseHistory'] },
     { key: 'taxes', label: t.taxes, submenus: ['current', 'history'] },
     { key: 'reports', label: t.reports, submenus: ['current'] },
   ]
@@ -5025,6 +5027,7 @@ function App() {
     if (activeSection === 'warehouse') {
       const stockCurrency = accountProfile.bankAccounts[0]?.currency || 'CZK'
       const totalStockValue = stockItems.reduce((sum, item) => sum + item.quantityOnHand * item.averageUnitCost, 0)
+      const stockAlertIds = new Set(stockAlerts.map((item) => item.id))
       const movementTypeLabels: Record<StockMovement['type'], string> = {
         in: warehouseUiText.incoming,
         out: warehouseUiText.outgoing,
@@ -5090,8 +5093,16 @@ function App() {
                         <p className="meta">{warehouseUiText.minQty}: {item.minQuantity.toFixed(2)} {item.unit}</p>
                       </div>
                       <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
-                        <button className="icon-delete" type="button" onClick={() => void handleToggleStockItemActive(item)}>
-                          {item.isActive ? warehouseUiText.deactivate : warehouseUiText.activate}
+                        <button
+                          className="stock-toggle-button"
+                          type="button"
+                          onClick={() => void handleToggleStockItemActive(item)}
+                          title={item.isActive ? warehouseUiText.deactivate : warehouseUiText.activate}
+                          aria-label={item.isActive ? warehouseUiText.deactivate : warehouseUiText.activate}
+                        >
+                          <span className={`stock-toggle-icon ${item.isActive ? 'active' : 'inactive'}`}>
+                            {item.isActive ? '✕' : '✓'}
+                          </span>
                         </button>
                       </div>
                     </li>
@@ -5220,6 +5231,11 @@ function App() {
                         </p>
                         <p className="meta">{warehouseUiText.avgCost}: {item.averageUnitCost.toFixed(2)} {stockCurrency}</p>
                       </div>
+                      <div className="right stock-warning-wrap" onClick={(event) => event.stopPropagation()}>
+                        {stockAlertIds.has(item.id) && (
+                          <span className="stock-warning-icon" title={warehouseUiText.lowStockHint} aria-label={warehouseUiText.lowStockHint}>!</span>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -5260,32 +5276,6 @@ function App() {
         )
       }
 
-      if (activeSubmenu === 'warehouseAlerts') {
-        return (
-          <section className="card">
-            <h2>{warehouseUiText.menu} / {warehouseUiText.alerts}</h2>
-            <div className="report-panel documents-panel">
-              {stockAlerts.length === 0 ? (
-                <p className="empty">{warehouseUiText.noAlerts}</p>
-              ) : (
-                <ul className="invoice-list">
-                  {stockAlerts.map((item) => (
-                    <li key={item.id}>
-                      <div>
-                        <p className="customer">{item.name} ({item.sku})</p>
-                        <p className="meta">
-                          {warehouseUiText.onHand}: {item.quantityOnHand.toFixed(2)} {item.unit} · {warehouseUiText.minQty}: {item.minQuantity.toFixed(2)} {item.unit}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            {stockMessage && <p className="error">{stockMessage}</p>}
-          </section>
-        )
-      }
     }
 
     if (activeSection === 'invoices' && activeSubmenu === 'new') {
@@ -6482,7 +6472,6 @@ function App() {
             </div>
           )}
         </div>
-        <h1 className="hero-title">{t.title}</h1>
       </header>
 
       {!token && (
@@ -6691,7 +6680,6 @@ function App() {
       {token && (
         <section className="workspace-shell">
           <aside className="card side-menu">
-            <img src={brandLogoSrc} alt="Invoicer" className="brand-logo-sidebar" onError={(event) => { event.currentTarget.src = logoSrc }} />
             {menuItems.map((item) => (
               <div key={item.key} className="menu-group">
                 <button

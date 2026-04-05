@@ -45,7 +45,7 @@
 
 /* Brand logo sizes */
 .brand-logo-hero {
-  height: 40px;
+  height: 88px;
   width: auto;
   object-fit: contain;
   display: block;
@@ -461,6 +461,50 @@
   border-radius: 0.5rem;
   cursor: pointer;
   padding: 0.35rem 0.55rem;
+}
+
+.stock-toggle-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--input-border);
+  background: var(--card-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.stock-toggle-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.stock-toggle-icon.active {
+  color: #dc2626;
+}
+
+.stock-toggle-icon.inactive {
+  color: #16a34a;
+}
+
+.stock-warning-wrap {
+  min-width: 28px;
+}
+
+.stock-warning-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
 }
 
 .invoice-preview {
