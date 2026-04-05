@@ -381,6 +381,8 @@ type Translation = {
   newSubmenu: string
   unpaidSubmenu: string
   historySubmenu: string
+  invoiceHistoryYearLabel: string
+  invoiceHistoryAllYears: string
   currentSubmenu: string
   contactsSubmenu: string
   storedSubmenu: string
@@ -531,6 +533,8 @@ const translations: Record<Language, Translation> = {
     newSubmenu: 'New',
     unpaidSubmenu: 'Active',
     historySubmenu: 'History',
+    invoiceHistoryYearLabel: 'Year',
+    invoiceHistoryAllYears: 'All years',
     currentSubmenu: 'Current',
     contactsSubmenu: 'Contacts',
     storedSubmenu: 'Stored',
@@ -679,6 +683,8 @@ const translations: Record<Language, Translation> = {
     newSubmenu: 'Nové',
     unpaidSubmenu: 'Aktivní',
     historySubmenu: 'Historie',
+    invoiceHistoryYearLabel: 'Rok',
+    invoiceHistoryAllYears: 'Všechny roky',
     currentSubmenu: 'Aktuální',
     contactsSubmenu: 'Kontakty',
     storedSubmenu: 'Uloženo',
@@ -827,6 +833,8 @@ const translations: Record<Language, Translation> = {
     newSubmenu: 'Neu',
     unpaidSubmenu: 'Aktiv',
     historySubmenu: 'Verlauf',
+    invoiceHistoryYearLabel: 'Jahr',
+    invoiceHistoryAllYears: 'Alle Jahre',
     currentSubmenu: 'Aktuell',
     contactsSubmenu: 'Kontakte',
     storedSubmenu: 'Gespeichert',
@@ -975,6 +983,8 @@ const translations: Record<Language, Translation> = {
     newSubmenu: 'Новые',
     unpaidSubmenu: 'Активные',
     historySubmenu: 'История',
+    invoiceHistoryYearLabel: 'Год',
+    invoiceHistoryAllYears: 'Все годы',
     currentSubmenu: 'Текущие',
     contactsSubmenu: 'Контакты',
     storedSubmenu: 'Сохраненные',
@@ -1198,6 +1208,7 @@ function App() {
   const [reportError, setReportError] = useState('')
   const [reportRange, setReportRange] = useState<PeriodRange>('month')
   const [overviewRange, setOverviewRange] = useState<PeriodRange>('all')
+  const [invoiceHistoryYear, setInvoiceHistoryYear] = useState<string>('all')
 
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null)
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null)
@@ -5640,13 +5651,51 @@ function App() {
     }
 
     if (activeSection === 'invoices' && activeSubmenu === 'history') {
+      const invoiceHistoryYears = Array.from(
+        new Set(
+          invoices
+            .map((invoice) => {
+              const sourceDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date(invoice.createdAt)
+              return Number.isNaN(sourceDate.getTime()) ? null : sourceDate.getFullYear()
+            })
+            .filter((year): year is number => year !== null),
+        ),
+      ).sort((a, b) => b - a)
+
+      const filteredHistoryInvoices = invoices.filter((invoice) => {
+        if (invoiceHistoryYear === 'all') {
+          return true
+        }
+        const selectedYear = Number(invoiceHistoryYear)
+        const sourceDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date(invoice.createdAt)
+        return !Number.isNaN(sourceDate.getTime()) && sourceDate.getFullYear() === selectedYear
+      })
+
+      const visibleHistoryPreview =
+        previewInvoice && filteredHistoryInvoices.some((invoice) => invoice.id === previewInvoice.id)
+          ? previewInvoice
+          : null
+
       return (
         <section className="card">
-          <h2>{workspaceUiText.invoiceHistoryTitle}</h2>
-          {invoices.length === 0 && <p className="empty">{workspaceUiText.noPaidInvoices}</p>}
+          <div className="report-head-row">
+            <h2>{workspaceUiText.invoiceHistoryTitle}</h2>
+            <div className="report-actions">
+              <label>
+                {t.invoiceHistoryYearLabel}
+                <select value={invoiceHistoryYear} onChange={(event) => setInvoiceHistoryYear(event.target.value)}>
+                  <option value="all">{t.invoiceHistoryAllYears}</option>
+                  {invoiceHistoryYears.map((year) => (
+                    <option key={year} value={String(year)}>{year}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          {filteredHistoryInvoices.length === 0 && <p className="empty">{workspaceUiText.noPaidInvoices}</p>}
           <div className="report-two-col tax-panels">
           <ul className="invoice-list report-panel documents-panel">
-            {invoices.map((invoice) => {
+            {filteredHistoryInvoices.map((invoice) => {
               const total = getInvoiceTotals(invoice).gross
               const currency = getInvoiceCurrency(invoice)
               return (
@@ -5670,7 +5719,7 @@ function App() {
           </ul>
 
           <div className="report-panel documents-panel">
-            {previewInvoice ? renderInvoicePreviewCard(previewInvoice) : <p className="empty">-</p>}
+            {visibleHistoryPreview ? renderInvoicePreviewCard(visibleHistoryPreview) : <p className="empty">-</p>}
           </div>
           </div>
         </section>
