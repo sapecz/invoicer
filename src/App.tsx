@@ -1800,28 +1800,34 @@ function App() {
 
   function prefillDocumentFromExtractedText(text: string, fileName: string, sourceType: 'pdf' | 'image' | 'manual') {
     const normalized = text.replace(/\u00A0/g, ' ')
+    const normalizedInline = normalized.replace(/\s+/g, ' ').trim()
 
     const supplierBlock = findFirstMatch(normalized, [
-      /(?:dodavatel)[:\s]+(.+?)(?:\n|odb[ěe]ratel|ico|iČo|$)/i,
+      /(?:dodavatel)[:\s]+(.+?)(?:\n|odb[ěe]ratel|i[čc]o|$)/i,
       /supplier[:\s]+(.+?)(?:\n|customer|$)/i,
     ])
-    const supplierName = findFirstMatch(supplierBlock || normalized, [
+    const supplierNameRaw = findFirstMatch(supplierBlock || normalized, [
       /^([A-Z][A-Za-z0-9\s,.\-&()]+?)(?:\n|,\s*[a-z]|$)/i,
       /^(.+?)(?:\s+\d{1,5}\/\d{1,5}|\s+\d{3}\s*\d{2}|\s+i[čc]\s*:|\n|$)/i,
     ])
+    const supplierName = /^(proforma|faktura|invoice|da[ňn]ov[ýy]\s+doklad)/i.test(supplierNameRaw.trim()) ? '' : supplierNameRaw
     const supplierIcFromBlock = findFirstMatch(supplierBlock || normalized, [
-      /i[čc]\s*[:]?\s*([0-9]{6,12})/i,
-      /ic\s*[:]?\s*([0-9]{6,12})/i,
+      /i[čc]\s*[:]?\s*([0-9][0-9\s]{5,15})/i,
+      /ic\s*[:]?\s*([0-9][0-9\s]{5,15})/i,
     ])
-    const supplierIcNearProfile = findFirstMatch(normalized, [
-      /i[čc]\s*[:]?\s*([0-9]{6,12})\s*(?:odb[ěe]ratel|d[íi]č|tel|fax|e-mail)/i,
+    const supplierIcNearProfile = findFirstMatch(normalizedInline, [
+      /i[čc]\s*[:]?\s*([0-9][0-9\s]{5,15})\s*(?:odb[ěe]ratel|d[íi]č|tel|fax|e-mail)/i,
     ])
-    const allIcMatches = Array.from(normalized.matchAll(/i[čc]\s*[:]?\s*([0-9]{6,12})/gi)).map((m) => m[1])
+    const allIcMatches = Array.from(normalizedInline.matchAll(/i[čc]\s*[:]?\s*([0-9][0-9\s]{5,15})/gi))
+      .map((m) => m[1].replace(/\D/g, ''))
+      .filter((ic) => ic.length >= 6 && ic.length <= 12)
+    const normalizedSupplierIcFromBlock = supplierIcFromBlock.replace(/\D/g, '')
+    const normalizedSupplierIcNearProfile = supplierIcNearProfile.replace(/\D/g, '')
     // If we know the user's IC, prefer extracting the OTHER IC (customer/supplier)
     const userIc = accountProfile.companyIc?.trim()
     const customerIcsOnly = userIc && allIcMatches.length > 1 ? allIcMatches.filter((ic) => ic !== userIc) : allIcMatches
     const supplierIcFallback = customerIcsOnly[0] || allIcMatches[0] || ''
-    const supplierIc = supplierIcFromBlock || supplierIcNearProfile || supplierIcFallback
+    const supplierIc = normalizedSupplierIcFromBlock || normalizedSupplierIcNearProfile || supplierIcFallback
 
     const invoiceNumber = findFirstMatch(normalized, [
       /^\s*([0-9]{6,})\s+faktura/i,
@@ -1867,22 +1873,22 @@ function App() {
       if (!resolvedDueDate && allDates[1]) resolvedDueDate = allDates[1]
     }
 
-    const totalRaw = findFirstMatch(normalized, [
+    const totalRaw = findFirstMatch(normalizedInline, [
       /celek(?:em)?\s+k\s*[úu]hrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /celek(?:em)?\s+s\s+dph\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /k\s*uhrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /(?:celkem|total)\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
     ])
-    const vatRaw = findFirstMatch(normalized, [
-      /dph\s+([0-9]+)%/i,
-      /vat\s+([0-9]+)%/i,
+    const vatRaw = findFirstMatch(normalizedInline, [
+      /dph\s*([0-9]+)\s*%/i,
+      /vat\s*([0-9]+)\s*%/i,
       /(?:dph|vat)[:\s]*([0-9.,]+)/i,
     ])
-    const baseRaw = findFirstMatch(normalized, [
-      /celek(?:em)?\s+bez\s+dph\s*[:]?\s*([0-9.,]+)/i,
-      /cena\s+bez\s+dph\s*[:]?\s*([0-9.,]+)/i,
-      /z[aá]klad\s*[:]?\s*([0-9.,]+)/i,
-      /base[:\s]*([0-9.,]+)/i,
+    const baseRaw = findFirstMatch(normalizedInline, [
+      /celek(?:em)?\s+bez\s+dph\s*[:]?\s*([0-9\s.,]+)/i,
+      /cena\s+bez\s+dph\s*[:]?\s*([0-9\s.,]+)/i,
+      /z[aá]klad\s*[:]?\s*([0-9\s.,]+)/i,
+      /base[:\s]*([0-9\s.,]+)/i,
     ])
 
     const hasNoVat = /nejsme\s+pl[áa]tci\s+dph|not\s+vat\s+payer/i.test(normalized)
@@ -5139,7 +5145,7 @@ function App() {
                 <option value="">{workspaceUiText.selectExistingOrder}</option>
                 {orders.map((order) => (
                   <option key={order.id} value={order.id}>
-                    {order.title} ({order.customer.name})
+                    {order.title} ({order.customer?.name || '-'})
                   </option>
                 ))}
               </select>
@@ -5228,8 +5234,8 @@ function App() {
                   <p className="meta">
                     {[
                       p.pricingMode === 'md' && p.days !== null && p.days !== undefined && `${workspaceUiText.remainingDays}: ${(p.days - p.daysUsed).toFixed(1)} / ${p.days}`,
-                      p.pricingMode === 'budget' && p.budget !== null && `${workspaceUiText.remainingBudget}: ${(p.budget - p.budgetUsed).toFixed(2)} ${p.currency}`,
-                      p.mdRate && p.mdRate > 0 && `${workspaceUiText.MDRate}: ${p.mdRate} ${p.currency}`,
+                      p.pricingMode === 'budget' && p.budget !== null && `${workspaceUiText.remainingBudget}: ${(p.budget - p.budgetUsed).toFixed(2)} ${p.currency || 'CZK'}`,
+                      p.mdRate && p.mdRate > 0 && `${workspaceUiText.MDRate}: ${p.mdRate} ${p.currency || 'CZK'}`,
                     ]
                       .filter(Boolean)
                       .join('  ·  ')}
@@ -5275,7 +5281,7 @@ function App() {
                     <p className="meta-value">
                       {visiblePreviewProject.pricingMode === 'md' && visiblePreviewProject.days !== null
                         ? `${visiblePreviewProject.daysUsed.toFixed(1)} / ${visiblePreviewProject.days} MD`
-                        : `${visiblePreviewProject.budgetUsed.toFixed(2)} / ${(visiblePreviewProject.budget ?? 0).toFixed(2)} ${visiblePreviewProject.currency}`}
+                        : `${visiblePreviewProject.budgetUsed.toFixed(2)} / ${(visiblePreviewProject.budget ?? 0).toFixed(2)} ${visiblePreviewProject.currency || 'CZK'}`}
                     </p>
                     <div className="consumption-row compact">
                       <div className="consumption-track">
@@ -5367,7 +5373,7 @@ function App() {
                     <p className="meta-value">
                       {visiblePreviewProject.pricingMode === 'md' && visiblePreviewProject.days !== null
                         ? `${visiblePreviewProject.daysUsed.toFixed(1)} / ${visiblePreviewProject.days} MD`
-                        : `${visiblePreviewProject.budgetUsed.toFixed(2)} / ${(visiblePreviewProject.budget ?? 0).toFixed(2)} ${visiblePreviewProject.currency}`}
+                        : `${visiblePreviewProject.budgetUsed.toFixed(2)} / ${(visiblePreviewProject.budget ?? 0).toFixed(2)} ${visiblePreviewProject.currency || 'CZK'}`}
                     </p>
                     <div className="consumption-row compact">
                       <div className="consumption-track">
