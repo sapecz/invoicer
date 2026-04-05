@@ -1015,7 +1015,7 @@ const inferredApiBaseUrl =
   typeof window !== 'undefined' && window.location.hostname === 'invoicer.primetech.cz'
     ? 'https://invoicer-api-8qkl.onrender.com'
     : ''
-const apiBaseUrl = configuredApiBaseUrl || inferredApiBaseUrl
+const apiBaseUrl = configuredApiBaseUrl || inferredApiBaseUrl || ''
 const staticAssetVersion = '20260402'
 const lightLogoPath = `/logo_light.png?v=${staticAssetVersion}`
 const darkLogoPath = `/logo_dark.png?v=${staticAssetVersion}`
