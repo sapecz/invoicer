@@ -73,6 +73,7 @@ type AdminUserOption = {
   displayName: string
   isAdmin: boolean
   isBlocked: boolean
+  lastLoginAt: string | null
   createdAt: string
 }
 
@@ -5159,6 +5160,7 @@ function App() {
                     <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Jméno' : 'Name'}</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Admin' : 'Admin'}</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Blokován' : 'Blocked'}</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Poslední login' : 'Last login'}</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>{language === 'cz' ? 'Akce' : 'Actions'}</th>
                   </tr>
                 </thead>
@@ -5169,6 +5171,13 @@ function App() {
                       <td style={{ padding: '10px' }}>{adminUser.displayName}</td>
                       <td style={{ padding: '10px' }}>{adminUser.isAdmin ? '✓' : '-'}</td>
                       <td style={{ padding: '10px' }}>{adminUser.isBlocked ? '✓' : '-'}</td>
+                      <td style={{ padding: '10px' }}>
+                        {adminUser.lastLoginAt
+                          ? new Date(adminUser.lastLoginAt).toLocaleString()
+                          : language === 'cz'
+                            ? 'Nikdy'
+                            : 'Never'}
+                      </td>
                       <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
                         <button
                           type="button"
@@ -5180,8 +5189,9 @@ function App() {
                           }}
                           disabled={adminActionUserId === adminUser.id}
                           title={language === 'cz' ? 'Smazat uživatele' : 'Delete user'}
+                          aria-label={language === 'cz' ? 'Smazat uživatele' : 'Delete user'}
                         >
-                          {language === 'cz' ? 'Smazat' : 'Delete'}
+                          🗑️
                         </button>
                         <button
                           type="button"
@@ -5193,9 +5203,10 @@ function App() {
                           }}
                           disabled={adminActionUserId === adminUser.id}
                           title={language === 'cz' ? 'Blokovat/odblokovat' : 'Block/unblock'}
+                          aria-label={language === 'cz' ? 'Blokovat/odblokovat uživatele' : 'Block or unblock user'}
                           style={{ marginLeft: '5px' }}
                         >
-                          {adminUser.isBlocked ? (language === 'cz' ? 'Odblokovat' : 'Unblock') : (language === 'cz' ? 'Blokovat' : 'Block')}
+                          {adminUser.isBlocked ? '👤✅' : '👤🚫'}
                         </button>
                         <button
                           type="button"
@@ -5207,9 +5218,10 @@ function App() {
                           }}
                           disabled={adminActionUserId === adminUser.id}
                           title={language === 'cz' ? 'Resetovat heslo' : 'Reset password'}
+                          aria-label={language === 'cz' ? 'Resetovat heslo uživatele' : 'Reset user password'}
                           style={{ marginLeft: '5px' }}
                         >
-                          {language === 'cz' ? 'Resetovat' : 'Reset'}
+                          🔑
                         </button>
                       </td>
                     </tr>
@@ -7018,7 +7030,7 @@ function App() {
           <section className="workspace-main">{renderSectionContent()}</section>
         </section>
       )}
-      <footer className="app-version">Verze 0.14</footer>
+      <footer className="app-version">Verze 0.15</footer>
     </main>
   )
 }

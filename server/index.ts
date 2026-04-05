@@ -164,10 +164,10 @@ async function getAuthContext(req: express.Request): Promise<AuthContext | null>
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, isAdmin: true },
+    select: { id: true, isAdmin: true, isBlocked: true },
   })
 
-  if (!user) {
+  if (!user || user.isBlocked) {
     return null
   }
 
@@ -272,6 +272,10 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ message: 'Invalid credentials' })
   }
 
+  if (user.isBlocked) {
+    return res.status(403).json({ message: 'Account is blocked' })
+  }
+
   const passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash)
   if (!passwordOk) {
     return res.status(401).json({ message: 'Invalid credentials' })
@@ -281,15 +285,21 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(403).json({ message: 'Email not verified' })
   }
 
-  const token = createAuthToken(user.id)
+  const loginUser = await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      isAdmin: true,
+    },
+  })
+
+  const token = createAuthToken(loginUser.id)
   return res.json({
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      isAdmin: Boolean(user.isAdmin),
-    },
+    user: loginUser,
   })
 })
 
@@ -395,15 +405,18 @@ app.get('/api/auth/google/callback', async (req, res) => {
       return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent('Google account could not be created')}`)
     }
 
-    if (!user.isVerified || user.displayName !== (profile.name?.trim() || email)) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          displayName: profile.name?.trim() || email,
-          isVerified: true,
-        },
-      })
+    if (user.isBlocked) {
+      return res.redirect(`${frontendUrl}/?google_error=${encodeURIComponent('Account is blocked')}`)
     }
+
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        displayName: profile.name?.trim() || email,
+        isVerified: true,
+        lastLoginAt: new Date(),
+      },
+    })
 
     const token = createAuthToken(user.id)
     return res.redirect(`${frontendUrl}/?google_token=${encodeURIComponent(token)}`)
@@ -427,14 +440,20 @@ app.get('/api/auth/me', async (req, res) => {
       email: true,
       displayName: true,
       isAdmin: true,
+      isBlocked: true,
     },
   })
 
-  if (!user) {
+  if (!user || user.isBlocked) {
     return res.status(401).json({ message: 'Unauthorized' })
   }
 
-  return res.json(user)
+  return res.json({
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    isAdmin: user.isAdmin,
+  })
 })
 
 app.get('/api/users', async (req, res) => {
@@ -2001,6 +2020,7 @@ app.get('/api/admin/users', async (req, res) => {
         displayName: true,
         isAdmin: true,
         isBlocked: true,
+        lastLoginAt: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
