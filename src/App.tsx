@@ -1694,20 +1694,31 @@ function App() {
   function normalizeDate(raw: string): string {
     if (!raw) return ''
     const date = raw.trim().replace(/\s+/g, '')
-    // Czech format: DD.MM.YYYY or DD-MM-YYYY
-    const cz = /^(\d{1,2})[\.\-](\d{1,2})[\.\-](\d{4})$/.exec(date)
+    
+    // Czech format: DD.MM.YYYY or DD-MM-YYYY or DD/MM/YYYY
+    const cz = /^(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})$/.exec(date)
     if (cz) {
       const day = cz[1].padStart(2, '0')
       const month = cz[2].padStart(2, '0')
-      return `${cz[3]}-${month}-${day}`
+      const year = cz[3]
+      // Validate month and day
+      const monthNum = parseInt(cz[2])
+      const dayNum = parseInt(cz[1])
+      if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+        return `${year}-${month}-${day}`
+      }
     }
 
-    // ISO format: YYYY-MM-DD
-    const iso = /^(\d{4})[\.\-](\d{1,2})[\.\-](\d{1,2})$/.exec(date)
+    // ISO format: YYYY-MM-DD or YYYY.MM.DD
+    const iso = /^(\d{4})[\.\/-](\d{1,2})[\.\/-](\d{1,2})$/.exec(date)
     if (iso) {
       const month = iso[2].padStart(2, '0')
       const day = iso[3].padStart(2, '0')
-      return `${iso[1]}-${month}-${day}`
+      const monthNum = parseInt(iso[2])
+      const dayNum = parseInt(iso[3])
+      if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+        return `${iso[1]}-${month}-${day}`
+      }
     }
 
     return ''
@@ -1750,27 +1761,24 @@ function App() {
     const normalized = text.replace(/\u00A0/g, ' ')
 
     const supplierBlock = findFirstMatch(normalized, [
-      /dodavatel\s+(.+?)\s+odb[ěe]ratel/i,
-      /supplier\s+(.+?)\s+customer/i,
+      /(?:dodavatel)[:\s]+(.+?)(?:\n|odb[ěe]ratel|ico|iČo|$)/i,
+      /supplier[:\s]+(.+?)(?:\n|customer|$)/i,
     ])
     const supplierName = findFirstMatch(supplierBlock || normalized, [
-      /^(.+?)\s{2,}/,
-      /^(.+?)(?:\s+\d{1,5}\/\d{1,5}|\s+\d{3}\s*\d{2}\s+[a-z\u00c0-\u017f]+|\s+i[čc]\s*:|$)/i,
-      /^([^\n\r]+?)(?:\s+i[čc]\s*:|\s+nejsme\s+pl[áa]tci|\s+kontaktn[íi]\s+[úu]daje|$)/i,
-      /dodavatel[:\s]+(.+?)(?:\s+odb[ěe]ratel|$)/i,
-      /supplier[:\s]+(.+?)(?:\s+customer|$)/i,
+      /^([A-Z][A-Za-z0-9\s,.\-&()]+?)(?:\n|,\s*[a-z]|$)/i,
+      /^(.+?)(?:\s+\d{1,5}\/\d{1,5}|\s+\d{3}\s*\d{2}|\s+i[čc]\s*:|\n|$)/i,
     ])
     const supplierIcFromBlock = findFirstMatch(supplierBlock || normalized, [
       /i[čc]\s*[:]?\s*([0-9]{6,12})/i,
       /ic\s*[:]?\s*([0-9]{6,12})/i,
     ])
     const supplierIcNearProfile = findFirstMatch(normalized, [
-      /i[čc]\s*[:]?\s*([0-9]{6,12})\s+nejsme\s+pl[áa]tci\s+dph/i,
-      /i[čc]\s*[:]?\s*([0-9]{6,12})\s+kontaktn[íi]\s+[úu]daje/i,
+      /i[čc]\s*[:]?\s*([0-9]{6,12})\s*(?:odb[ěe]ratel|d[íi]č|tel|fax|e-mail)/i,
     ])
     const allIcMatches = Array.from(normalized.matchAll(/i[čc]\s*[:]?\s*([0-9]{6,12})/gi)).map((m) => m[1])
-    const supplierIcFallback = allIcMatches.length > 1 ? allIcMatches[allIcMatches.length - 1] : allIcMatches[0] || ''
-    const supplierIc = supplierIcNearProfile || supplierIcFromBlock || supplierIcFallback
+    // Prefer the first IČO (supplier), not the last one (customer)
+    const supplierIcFallback = allIcMatches[0] || ''
+    const supplierIc = supplierIcFromBlock || supplierIcNearProfile || supplierIcFallback
 
     const invoiceNumber = findFirstMatch(normalized, [
       /^\s*([0-9]{6,})\s+faktura/i,
@@ -1784,6 +1792,7 @@ function App() {
       /\b([0-9]{1,6}-?[0-9]{1,17}\/[0-9]{4})\b/,
     ])
     const variableSymbol = findFirstMatch(normalized, [
+      /variabiln[íi]\s+symbol\s*[:]?\s*([0-9]{4,20})/i,
       /variabiln[íi]\s*[:]?\s*([0-9]{4,20})/i,
       /variable\s+symbol\s*[:]?\s*([0-9]{4,20})/i,
     ])
@@ -1800,6 +1809,20 @@ function App() {
       /datum\s+splatnosti\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
       /due\s+date\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
     ])
+    
+    // Fallback: if no dates found with labels, extract all dates and use first two
+    let resolvedIssueDate = issueDateRaw
+    let resolvedDueDate = dueDateRaw
+    if (!resolvedIssueDate || !resolvedDueDate) {
+      const allDates = Array.from(normalized.matchAll(/(\d{1,2})[\.\-](\d{1,2})[\.\-](\d{4})/g))
+        .map((m) => `${m[1]}.${m[2]}.${m[3]}`)
+        .filter((d) => {
+          const normalized = normalizeDate(d)
+          return normalized !== ''
+        })
+      if (!resolvedIssueDate && allDates[0]) resolvedIssueDate = allDates[0]
+      if (!resolvedDueDate && allDates[1]) resolvedDueDate = allDates[1]
+    }
 
     const totalRaw = findFirstMatch(normalized, [
       /celek(?:em)?\s+k\s*[úu]hrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
@@ -1842,8 +1865,8 @@ function App() {
     if (bankAccount) extractedFields.push('bankAccount')
     if (variableSymbol) extractedFields.push('variableSymbol')
     if (constantSymbol) extractedFields.push('constantSymbol')
-    if (normalizeDate(issueDateRaw)) extractedFields.push('issueDate')
-    if (normalizeDate(dueDateRaw)) extractedFields.push('dueDate')
+    if (normalizeDate(resolvedIssueDate)) extractedFields.push('issueDate')
+    if (normalizeDate(resolvedDueDate)) extractedFields.push('dueDate')
     if (currency) extractedFields.push('currency')
     if (normalizedTotal) extractedFields.push('totalAmount')
     if (normalizedVat) extractedFields.push('vatAmount')
@@ -1863,8 +1886,8 @@ function App() {
       bankAccount: bankAccount || prev.bankAccount,
       variableSymbol: variableSymbol || prev.variableSymbol,
       constantSymbol: constantSymbol || prev.constantSymbol,
-      issueDate: normalizeDate(issueDateRaw) || prev.issueDate,
-      dueDate: normalizeDate(dueDateRaw) || prev.dueDate,
+      issueDate: normalizeDate(resolvedIssueDate) || prev.issueDate,
+      dueDate: normalizeDate(resolvedDueDate) || prev.dueDate,
       currency,
       totalAmount: normalizedTotal || prev.totalAmount,
       vatAmount: normalizedVat || prev.vatAmount,
