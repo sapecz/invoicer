@@ -78,6 +78,16 @@ type AccountProfile = {
   requiresControlStatement: boolean
 }
 
+type CompanyLookupResult = {
+  ico: string
+  dic: string | null
+  name: string | null
+  address: string | null
+  city: string | null
+  zip: string | null
+  country: string
+}
+
 type Customer = {
   id: number
   name: string
@@ -1118,6 +1128,9 @@ function App() {
   })
   const [accountSaving, setAccountSaving] = useState(false)
   const [accountMessage, setAccountMessage] = useState('')
+  const [accountCompanyInfo, setAccountCompanyInfo] = useState<CompanyLookupResult | null>(null)
+  const [accountCompanyLoading, setAccountCompanyLoading] = useState(false)
+  const [accountCompanyMessage, setAccountCompanyMessage] = useState('')
   const [documents, setDocuments] = useState<ReceivedDocument[]>([])
   const [documentForm, setDocumentForm] = useState<DocumentForm>(emptyDocumentForm)
   const [documentSaving, setDocumentSaving] = useState(false)
@@ -1361,6 +1374,16 @@ function App() {
         saving: 'Ukládám...',
         saved: 'Nastavení účtu uloženo.',
         selectBankAccount: 'Vyberte účet',
+        companyLookupLoading: 'Načítám údaje firmy z ARES...',
+        companyLookupNotFound: 'Firma s tímto IČ nebyla v ARES nalezena.',
+        companyLookupError: 'Nepodařilo se načíst údaje firmy z ARES.',
+        companyInfoTitle: 'Základní údaje o firmě',
+        companyName: 'Název',
+        companyDic: 'DIČ',
+        companyAddress: 'Adresa',
+        companyCity: 'Město',
+        companyZip: 'PSČ',
+        companyCountry: 'Stát',
       }
     }
     return {
@@ -1386,6 +1409,16 @@ function App() {
       saving: language === 'ru' ? 'Сохранение...' : language === 'ger' ? 'Speichern...' : 'Saving...',
       saved: language === 'ru' ? 'Настройки аккаунта сохранены.' : language === 'ger' ? 'Kontoeinstellungen gespeichert.' : 'Account settings saved.',
       selectBankAccount: language === 'ru' ? 'Выберите счет' : language === 'ger' ? 'Konto wählen' : 'Select bank account',
+      companyLookupLoading: language === 'ru' ? 'Загружаю данные компании из ARES...' : language === 'ger' ? 'Lade Firmendaten aus ARES...' : 'Loading company data from ARES...',
+      companyLookupNotFound: language === 'ru' ? 'Компания с этим IČ не найдена в ARES.' : language === 'ger' ? 'Firma mit dieser IC wurde in ARES nicht gefunden.' : 'Company with this IC was not found in ARES.',
+      companyLookupError: language === 'ru' ? 'Не удалось загрузить данные компании из ARES.' : language === 'ger' ? 'Firmendaten aus ARES konnten nicht geladen werden.' : 'Could not load company data from ARES.',
+      companyInfoTitle: language === 'ru' ? 'Основные данные компании' : language === 'ger' ? 'Grunddaten des Unternehmens' : 'Basic company details',
+      companyName: language === 'ru' ? 'Название' : language === 'ger' ? 'Name' : 'Name',
+      companyDic: language === 'ru' ? 'DIČ' : language === 'ger' ? 'DIČ' : 'VAT ID',
+      companyAddress: language === 'ru' ? 'Адрес' : language === 'ger' ? 'Adresse' : 'Address',
+      companyCity: language === 'ru' ? 'Город' : language === 'ger' ? 'Stadt' : 'City',
+      companyZip: language === 'ru' ? 'Индекс' : language === 'ger' ? 'PLZ' : 'ZIP',
+      companyCountry: language === 'ru' ? 'Страна' : language === 'ger' ? 'Land' : 'Country',
     }
   }, [language])
 
@@ -1646,6 +1679,14 @@ function App() {
       isVatPayer: Boolean(data.isVatPayer),
       requiresControlStatement: Boolean(data.requiresControlStatement),
     })
+
+    const companyIc = (data.companyIc ?? '').trim()
+    if (companyIc) {
+      await loadCompanyByIc(companyIc, currentToken)
+    } else {
+      setAccountCompanyInfo(null)
+      setAccountCompanyMessage('')
+    }
   }
 
   async function loadDocuments(currentToken: string, status?: 'draft' | 'approved') {
@@ -1776,8 +1817,10 @@ function App() {
       /i[čc]\s*[:]?\s*([0-9]{6,12})\s*(?:odb[ěe]ratel|d[íi]č|tel|fax|e-mail)/i,
     ])
     const allIcMatches = Array.from(normalized.matchAll(/i[čc]\s*[:]?\s*([0-9]{6,12})/gi)).map((m) => m[1])
-    // Prefer the first IČO (supplier), not the last one (customer)
-    const supplierIcFallback = allIcMatches[0] || ''
+    // If we know the user's IC, prefer extracting the OTHER IC (customer/supplier)
+    const userIc = accountProfile.companyIc?.trim()
+    const customerIcsOnly = userIc && allIcMatches.length > 1 ? allIcMatches.filter((ic) => ic !== userIc) : allIcMatches
+    const supplierIcFallback = customerIcsOnly[0] || allIcMatches[0] || ''
     const supplierIc = supplierIcFromBlock || supplierIcNearProfile || supplierIcFallback
 
     const invoiceNumber = findFirstMatch(normalized, [
@@ -1831,14 +1874,15 @@ function App() {
       /(?:celkem|total)\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
     ])
     const vatRaw = findFirstMatch(normalized, [
-      /(?:dph|vat)\s+([0-9]+)%/i,
-      /(?:dph|vat)[:\s]*([0-9\s.,]+)\s*(?:%)?/i,
+      /dph\s+([0-9]+)%/i,
+      /vat\s+([0-9]+)%/i,
+      /(?:dph|vat)[:\s]*([0-9.,]+)/i,
     ])
     const baseRaw = findFirstMatch(normalized, [
-      /celek(?:em)?\s+bez\s+dph\s*[:]?\s*([0-9\s.,]+)/i,
-      /cena\s+bez\s+dph\s*[:]?\s*([0-9\s.,]+)/i,
-      /z[aá]klad\s*[:]?\s*([0-9\s.,]+)/i,
-      /base[:\s]*([0-9\s.,]+)/i,
+      /celek(?:em)?\s+bez\s+dph\s*[:]?\s*([0-9.,]+)/i,
+      /cena\s+bez\s+dph\s*[:]?\s*([0-9.,]+)/i,
+      /z[aá]klad\s*[:]?\s*([0-9.,]+)/i,
+      /base[:\s]*([0-9.,]+)/i,
     ])
 
     const hasNoVat = /nejsme\s+pl[áa]tci\s+dph|not\s+vat\s+payer/i.test(normalized)
@@ -1899,9 +1943,9 @@ function App() {
 
   async function handleDocumentFileUpload(file: File | null) {
     if (!file) return
+
     setDocumentMessage('')
     setDocumentExtracting(true)
-
     clearDocumentUploadPreview()
 
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
@@ -1963,6 +2007,44 @@ function App() {
       setDocumentMessage(`${documentsUiText.extractionFailedPrefix}: ${details}. ${documentsUiText.noText}`)
     } finally {
       setDocumentExtracting(false)
+    }
+  }
+
+  async function loadCompanyByIc(ic: string, currentToken: string) {
+    const query = ic.trim()
+    if (!query) {
+      setAccountCompanyInfo(null)
+      setAccountCompanyMessage('')
+      return
+    }
+
+    setAccountCompanyLoading(true)
+    setAccountCompanyMessage('')
+
+    try {
+      const response = await fetch(apiUrl(`/api/ares/${encodeURIComponent(query)}`), {
+        headers: { Authorization: `Bearer ${currentToken}` },
+      })
+
+      if (response.status === 404) {
+        setAccountCompanyInfo(null)
+        setAccountCompanyMessage(accountUiText.companyLookupNotFound)
+        return
+      }
+
+      if (!response.ok) {
+        setAccountCompanyInfo(null)
+        setAccountCompanyMessage(accountUiText.companyLookupError)
+        return
+      }
+
+      const data = (await response.json()) as CompanyLookupResult
+      setAccountCompanyInfo(data)
+    } catch {
+      setAccountCompanyInfo(null)
+      setAccountCompanyMessage(accountUiText.companyLookupError)
+    } finally {
+      setAccountCompanyLoading(false)
     }
   }
 
@@ -2773,10 +2855,14 @@ function App() {
       })
 
       if (!response.ok) {
-        throw new Error('Could not save account settings')
+        const errorData = await response.json().catch(() => ({}))
+        const errorMsg = errorData.message || `HTTP ${response.status}`
+        console.error('Account save error:', { status: response.status, error: errorData })
+        throw new Error(`Could not save account settings: ${errorMsg}`)
       }
 
       setAccountMessage(accountUiText.saved)
+      await loadCompanyByIc(accountProfile.companyIc, token)
       const defaultBankAccount = preferredInvoiceBankAccounts[0]?.accountNumber || accountProfile.bankAccount
       setInvoiceForm((prev) => ({
         ...prev,
@@ -4417,6 +4503,24 @@ function App() {
               />
             </label>
 
+            {accountCompanyLoading && <p className="meta">{accountUiText.companyLookupLoading}</p>}
+            {accountCompanyMessage && <p className="meta">{accountCompanyMessage}</p>}
+
+            {accountCompanyInfo && (
+              <div className="report-panel account-company-card">
+                <h3>{accountUiText.companyInfoTitle}</h3>
+                <div className="account-company-grid">
+                  <p><strong>IČ:</strong> {accountCompanyInfo.ico || '-'}</p>
+                  <p><strong>{accountUiText.companyDic}:</strong> {accountCompanyInfo.dic || '-'}</p>
+                  <p><strong>{accountUiText.companyName}:</strong> {accountCompanyInfo.name || '-'}</p>
+                  <p><strong>{accountUiText.companyAddress}:</strong> {accountCompanyInfo.address || '-'}</p>
+                  <p><strong>{accountUiText.companyCity}:</strong> {accountCompanyInfo.city || '-'}</p>
+                  <p><strong>{accountUiText.companyZip}:</strong> {accountCompanyInfo.zip || '-'}</p>
+                  <p><strong>{accountUiText.companyCountry}:</strong> {accountCompanyInfo.country || '-'}</p>
+                </div>
+              </div>
+            )}
+
             <label className="checkbox-line">
               <input
                 type="checkbox"
@@ -5123,9 +5227,9 @@ function App() {
                   </p>
                   <p className="meta">
                     {[
-                      p.pricingMode === 'md' && p.days !== null && `${workspaceUiText.remainingDays}: ${(p.days - p.daysUsed).toFixed(1)} / ${p.days}`,
+                      p.pricingMode === 'md' && p.days !== null && p.days !== undefined && `${workspaceUiText.remainingDays}: ${(p.days - p.daysUsed).toFixed(1)} / ${p.days}`,
                       p.pricingMode === 'budget' && p.budget !== null && `${workspaceUiText.remainingBudget}: ${(p.budget - p.budgetUsed).toFixed(2)} ${p.currency}`,
-                      p.mdRate && `${workspaceUiText.MDRate}: ${p.mdRate} ${p.currency}`,
+                      p.mdRate && p.mdRate > 0 && `${workspaceUiText.MDRate}: ${p.mdRate} ${p.currency}`,
                     ]
                       .filter(Boolean)
                       .join('  ·  ')}

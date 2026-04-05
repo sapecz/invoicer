@@ -1430,6 +1430,25 @@
   object-fit: contain;
 }
 
+.account-company-card {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.account-company-card h3 {
+  margin: 0;
+}
+
+.account-company-grid {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.account-company-grid p {
+  margin: 0;
+  color: var(--text);
+}
+
 @media (max-width: 740px) {
   .customer-form {
     grid-template-columns: 1fr;
