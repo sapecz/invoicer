@@ -1482,6 +1482,10 @@ function App() {
       order: language === 'ger' ? 'Auftrag' : language === 'ru' ? 'Заказ' : 'Order',
       finalUsage: language === 'ger' ? 'Endverbrauch' : language === 'ru' ? 'Итоговый расход' : 'Final usage',
       created: language === 'ger' ? 'Erstellt' : language === 'ru' ? 'Создано' : 'Created',
+      remainingDays: language === 'ger' ? 'Verbleibende Tage' : language === 'ru' ? 'Остаток дней' : 'Remaining days',
+      remainingBudget: language === 'ger' ? 'Verbleibendes Budget' : language === 'ru' ? 'Остаток бюджета' : 'Remaining budget',
+      MDRate: language === 'ger' ? 'MD-Satz' : language === 'ru' ? 'MD ставка' : 'MD Rate',
+      couldNotLoadDocuments: language === 'ger' ? 'Dokumente konnten nicht geladen werden' : language === 'ru' ? 'Не удалось загрузить документы' : 'Could not load documents',
       companyIds: language === 'ger' ? 'Unternehmensdaten' : language === 'ru' ? 'Идентификаторы компании' : 'Company IDs',
       address: language === 'ger' ? 'Adresse' : language === 'ru' ? 'Адрес' : 'Address',
       contact: language === 'ger' ? 'Kontakt' : language === 'ru' ? 'Контакт' : 'Contact',
@@ -1653,7 +1657,7 @@ function App() {
     })
 
     if (!response.ok) {
-      throw new Error('Could not load documents')
+      throw new Error(workspaceUiText.couldNotLoadDocuments)
     }
 
     const data = (await response.json()) as ReceivedDocument[]
@@ -1662,9 +1666,9 @@ function App() {
 
   function parseAmount(raw: string | undefined): number | null {
     if (!raw) return null
-    const normalized = raw.replace(/\s/g, '').replace(',', '.').replace(/[^\d.\-]/g, '')
+    const normalized = normalizeAmount(raw)
     const value = Number(normalized)
-    return Number.isFinite(value) ? value : null
+    return Number.isFinite(value) && value >= 0 ? value : null
   }
 
   function findFirstMatch(text: string, patterns: RegExp[]): string {
@@ -1683,18 +1687,23 @@ function App() {
       .replace('Kč', '')
       .replace(',', '.')
       .replace(/[^\d.-]/g, '')
+      .replace(/^-+(\d)/, '$1')
+      .trim()
   }
 
   function normalizeDate(raw: string): string {
-    const date = raw.trim()
-    const cz = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(date)
+    if (!raw) return ''
+    const date = raw.trim().replace(/\s+/g, '')
+    // Czech format: DD.MM.YYYY or DD-MM-YYYY
+    const cz = /^(\d{1,2})[\.\-](\d{1,2})[\.\-](\d{4})$/.exec(date)
     if (cz) {
       const day = cz[1].padStart(2, '0')
       const month = cz[2].padStart(2, '0')
       return `${cz[3]}-${month}-${day}`
     }
 
-    const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(date)
+    // ISO format: YYYY-MM-DD
+    const iso = /^(\d{4})[\.\-](\d{1,2})[\.\-](\d{1,2})$/.exec(date)
     if (iso) {
       const month = iso[2].padStart(2, '0')
       const day = iso[3].padStart(2, '0')
@@ -1784,24 +1793,29 @@ function App() {
     ])
 
     const issueDateRaw = findFirstMatch(normalized, [
-      /datum\s+vystaven[íi]\s*[:]?\s*(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
-      /issue\s+date\s*[:]?\s*(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
+      /datum\s+v?ystaven[íi]\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
+      /issue\s+date\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
     ])
     const dueDateRaw = findFirstMatch(normalized, [
-      /datum\s+splatnosti\s*[:]?\s*(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
-      /due\s+date\s*[:]?\s*(\d{1,2}\.\d{1,2}\.\d{4}|\d{4}-\d{1,2}-\d{1,2})/i,
+      /datum\s+splatnosti\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
+      /due\s+date\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
     ])
 
     const totalRaw = findFirstMatch(normalized, [
-      /celkem\s+k\s*[úu]hrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
+      /celek(?:em)?\s+k\s*[úu]hrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
+      /celek(?:em)?\s+s\s+dph\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /k\s*uhrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /(?:celkem|total)\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
     ])
     const vatRaw = findFirstMatch(normalized, [
-      /(?:dph|vat)[:\s]*([0-9\s.,]+)/i,
+      /(?:dph|vat)\s+([0-9]+)%/i,
+      /(?:dph|vat)[:\s]*([0-9\s.,]+)\s*(?:%)?/i,
     ])
     const baseRaw = findFirstMatch(normalized, [
-      /(?:z[aá]klad|base)[:\s]*([0-9\s.,]+)/i,
+      /celek(?:em)?\s+bez\s+dph\s*[:]?\s*([0-9\s.,]+)/i,
+      /cena\s+bez\s+dph\s*[:]?\s*([0-9\s.,]+)/i,
+      /z[aá]klad\s*[:]?\s*([0-9\s.,]+)/i,
+      /base[:\s]*([0-9\s.,]+)/i,
     ])
 
     const hasNoVat = /nejsme\s+pl[áa]tci\s+dph|not\s+vat\s+payer/i.test(normalized)
@@ -2329,9 +2343,11 @@ function App() {
 
   useEffect(() => {
     if (!token || activeSection !== 'documents') {
+      setDocumentMessage('')
       return
     }
 
+    setDocumentMessage('')
     const status = activeSubmenu === 'stored' ? 'approved' : 'draft'
     void loadDocuments(token, status).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'Unknown API error'
@@ -5080,13 +5096,13 @@ function App() {
                 <div>
                   <p className="customer">{p.name}</p>
                   <p className="meta">
-                    {[p.order?.title && `Order: ${p.order.title}`, p.order?.customer?.name && `Customer: ${p.order.customer.name}`].filter(Boolean).join('  ·  ')}
+                    {[p.order?.title && `${workspaceUiText.order}: ${p.order.title}`, p.order?.customer?.name && `${t.customer}: ${p.order.customer.name}`].filter(Boolean).join('  ·  ')}
                   </p>
                   <p className="meta">
                     {[
-                      p.pricingMode === 'md' && p.days !== null && `Remaining days: ${(p.days - p.daysUsed).toFixed(1)} / ${p.days}`,
-                      p.pricingMode === 'budget' && p.budget !== null && `Remaining budget: ${(p.budget - p.budgetUsed).toFixed(2)} ${p.currency}`,
-                      p.mdRate && `MD Rate: ${p.mdRate} ${p.currency}`,
+                      p.pricingMode === 'md' && p.days !== null && `${workspaceUiText.remainingDays}: ${(p.days - p.daysUsed).toFixed(1)} / ${p.days}`,
+                      p.pricingMode === 'budget' && p.budget !== null && `${workspaceUiText.remainingBudget}: ${(p.budget - p.budgetUsed).toFixed(2)} ${p.currency}`,
+                      p.mdRate && `${workspaceUiText.MDRate}: ${p.mdRate} ${p.currency}`,
                     ]
                       .filter(Boolean)
                       .join('  ·  ')}
