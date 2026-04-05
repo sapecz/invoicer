@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from './db.js'
 import { config } from './config.js'
@@ -1574,6 +1575,15 @@ const createStockMovementSchema = z.object({
   note: z.string().trim().max(500).optional(),
 })
 
+function isStockStorageNotReadyError(error: unknown) {
+  const message = error instanceof Error ? error.message : ''
+  return /stockitem|stockmovement|p2021|does not exist|doesn't exist|relation .* does not exist/i.test(message)
+}
+
+function isUniqueSkuError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+}
+
 app.get('/api/projects', async (req, res) => {
   const auth = await getAuthContext(req)
   if (!auth) {
@@ -1662,14 +1672,21 @@ app.get('/api/stock/items', async (req, res) => {
   const requestedUserId = parseRequestedUserId(req.query.userId)
   const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
 
-  const items = await prisma.stockItem.findMany({
-    where: {
-      ...(scopedUserId ? { userId: scopedUserId } : {}),
-    },
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-  })
+  try {
+    const items = await prisma.stockItem.findMany({
+      where: {
+        ...(scopedUserId ? { userId: scopedUserId } : {}),
+      },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    })
 
-  return res.json(items)
+    return res.json(items)
+  } catch (error) {
+    if (isStockStorageNotReadyError(error)) {
+      return res.json([])
+    }
+    return res.status(500).json({ message: 'Could not load stock items' })
+  }
 })
 
 app.post('/api/stock/items', async (req, res) => {
@@ -1701,8 +1718,16 @@ app.post('/api/stock/items', async (req, res) => {
       },
     })
     return res.status(201).json(item)
-  } catch {
-    return res.status(400).json({ message: 'Stock item with this SKU already exists' })
+  } catch (error) {
+    if (isStockStorageNotReadyError(error)) {
+      return res.status(503).json({ message: 'Stock storage is not ready yet. Run database migrations.' })
+    }
+    if (isUniqueSkuError(error)) {
+      return res.status(400).json({ message: 'Stock item with this SKU already exists' })
+    }
+    const details = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Stock item create failed:', error)
+    return res.status(500).json({ message: `Could not save stock item: ${details}` })
   }
 })
 
@@ -1725,21 +1750,28 @@ app.patch('/api/stock/items/:id', async (req, res) => {
     })
   }
 
-  const item = await prisma.stockItem.findUnique({
-    where: { id },
-    select: { id: true, userId: true },
-  })
+  try {
+    const item = await prisma.stockItem.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    })
 
-  if (!item || (!auth.isAdmin && item.userId !== auth.userId)) {
-    return res.status(404).json({ message: 'Stock item not found' })
+    if (!item || (!auth.isAdmin && item.userId !== auth.userId)) {
+      return res.status(404).json({ message: 'Stock item not found' })
+    }
+
+    const updated = await prisma.stockItem.update({
+      where: { id },
+      data: parsed.data,
+    })
+
+    return res.json(updated)
+  } catch (error) {
+    if (isStockStorageNotReadyError(error)) {
+      return res.status(503).json({ message: 'Stock storage is not ready yet. Run database migrations.' })
+    }
+    return res.status(500).json({ message: 'Could not update stock item' })
   }
-
-  const updated = await prisma.stockItem.update({
-    where: { id },
-    data: parsed.data,
-  })
-
-  return res.json(updated)
 })
 
 app.get('/api/stock/movements', async (req, res) => {
@@ -1752,26 +1784,33 @@ app.get('/api/stock/movements', async (req, res) => {
   const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
   const itemId = Number(req.query.stockItemId)
 
-  const movements = await prisma.stockMovement.findMany({
-    where: {
-      ...(scopedUserId ? { userId: scopedUserId } : {}),
-      ...(Number.isFinite(itemId) && itemId > 0 ? { stockItemId: itemId } : {}),
-    },
-    include: {
-      stockItem: {
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          unit: true,
+  try {
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        ...(scopedUserId ? { userId: scopedUserId } : {}),
+        ...(Number.isFinite(itemId) && itemId > 0 ? { stockItemId: itemId } : {}),
+      },
+      include: {
+        stockItem: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            unit: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 300,
-  })
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+    })
 
-  return res.json(movements)
+    return res.json(movements)
+  } catch (error) {
+    if (isStockStorageNotReadyError(error)) {
+      return res.json([])
+    }
+    return res.status(500).json({ message: 'Could not load stock movements' })
+  }
 })
 
 app.post('/api/stock/movements', async (req, res) => {
@@ -1791,83 +1830,90 @@ app.post('/api/stock/movements', async (req, res) => {
   const requestedUserId = parseRequestedUserId(req.query.userId)
   const ownerUserId = auth.isAdmin && requestedUserId ? requestedUserId : auth.userId
 
-  const existingItem = await prisma.stockItem.findFirst({
-    where: { id: parsed.data.stockItemId, userId: ownerUserId },
-  })
-
-  if (!existingItem) {
-    return res.status(404).json({ message: 'Stock item not found' })
-  }
-
-  const qty = parsed.data.quantity
-  const prevQty = existingItem.quantityOnHand
-  const prevAvg = existingItem.averageUnitCost
-  const movementType = parsed.data.type
-
-  const isIncoming = movementType === 'in' || movementType === 'adjust_plus'
-  const isOutgoing = movementType === 'out' || movementType === 'adjust_minus'
-
-  if (isOutgoing && prevQty < qty) {
-    return res.status(400).json({ message: 'Insufficient stock. Negative stock is not allowed.' })
-  }
-
-  let resolvedUnitCost = parsed.data.unitCost ?? prevAvg
-  let newQty = prevQty
-  let newAvg = prevAvg
-
-  if (isIncoming) {
-    resolvedUnitCost = parsed.data.unitCost ?? prevAvg
-    newQty = prevQty + qty
-    const currentValue = prevQty * prevAvg
-    const incomingValue = qty * resolvedUnitCost
-    newAvg = newQty > 0 ? (currentValue + incomingValue) / newQty : 0
-  }
-
-  if (isOutgoing) {
-    resolvedUnitCost = prevAvg
-    newQty = prevQty - qty
-    newAvg = newQty > 0 ? prevAvg : 0
-  }
-
-  const totalCost = qty * resolvedUnitCost
-
-  const result = await prisma.$transaction(async (tx) => {
-    const updatedItem = await tx.stockItem.update({
-      where: { id: existingItem.id },
-      data: {
-        quantityOnHand: newQty,
-        averageUnitCost: newAvg,
-      },
+  try {
+    const existingItem = await prisma.stockItem.findFirst({
+      where: { id: parsed.data.stockItemId, userId: ownerUserId },
     })
 
-    const movement = await tx.stockMovement.create({
-      data: {
-        userId: ownerUserId,
-        stockItemId: existingItem.id,
-        type: movementType,
-        quantity: qty,
-        unitCost: resolvedUnitCost,
-        totalCost,
-        sourceType: parsed.data.sourceType || null,
-        sourceRef: parsed.data.sourceRef || null,
-        note: parsed.data.note || null,
-      },
-      include: {
-        stockItem: {
-          select: {
-            id: true,
-            sku: true,
-            name: true,
-            unit: true,
+    if (!existingItem) {
+      return res.status(404).json({ message: 'Stock item not found' })
+    }
+
+    const qty = parsed.data.quantity
+    const prevQty = existingItem.quantityOnHand
+    const prevAvg = existingItem.averageUnitCost
+    const movementType = parsed.data.type
+
+    const isIncoming = movementType === 'in' || movementType === 'adjust_plus'
+    const isOutgoing = movementType === 'out' || movementType === 'adjust_minus'
+
+    if (isOutgoing && prevQty < qty) {
+      return res.status(400).json({ message: 'Insufficient stock. Negative stock is not allowed.' })
+    }
+
+    let resolvedUnitCost = parsed.data.unitCost ?? prevAvg
+    let newQty = prevQty
+    let newAvg = prevAvg
+
+    if (isIncoming) {
+      resolvedUnitCost = parsed.data.unitCost ?? prevAvg
+      newQty = prevQty + qty
+      const currentValue = prevQty * prevAvg
+      const incomingValue = qty * resolvedUnitCost
+      newAvg = newQty > 0 ? (currentValue + incomingValue) / newQty : 0
+    }
+
+    if (isOutgoing) {
+      resolvedUnitCost = prevAvg
+      newQty = prevQty - qty
+      newAvg = newQty > 0 ? prevAvg : 0
+    }
+
+    const totalCost = qty * resolvedUnitCost
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedItem = await tx.stockItem.update({
+        where: { id: existingItem.id },
+        data: {
+          quantityOnHand: newQty,
+          averageUnitCost: newAvg,
+        },
+      })
+
+      const movement = await tx.stockMovement.create({
+        data: {
+          userId: ownerUserId,
+          stockItemId: existingItem.id,
+          type: movementType,
+          quantity: qty,
+          unitCost: resolvedUnitCost,
+          totalCost,
+          sourceType: parsed.data.sourceType || null,
+          sourceRef: parsed.data.sourceRef || null,
+          note: parsed.data.note || null,
+        },
+        include: {
+          stockItem: {
+            select: {
+              id: true,
+              sku: true,
+              name: true,
+              unit: true,
+            },
           },
         },
-      },
+      })
+
+      return { updatedItem, movement }
     })
 
-    return { updatedItem, movement }
-  })
-
-  return res.status(201).json(result)
+    return res.status(201).json(result)
+  } catch (error) {
+    if (isStockStorageNotReadyError(error)) {
+      return res.status(503).json({ message: 'Stock storage is not ready yet. Run database migrations.' })
+    }
+    return res.status(500).json({ message: 'Could not save stock movement' })
+  }
 })
 
 app.get('/api/stock/alerts', async (req, res) => {
@@ -1879,15 +1925,22 @@ app.get('/api/stock/alerts', async (req, res) => {
   const requestedUserId = parseRequestedUserId(req.query.userId)
   const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
 
-  const alerts = await prisma.stockItem.findMany({
-    where: {
-      ...(scopedUserId ? { userId: scopedUserId } : {}),
-      isActive: true,
-    },
-    orderBy: { name: 'asc' },
-  })
+  try {
+    const alerts = await prisma.stockItem.findMany({
+      where: {
+        ...(scopedUserId ? { userId: scopedUserId } : {}),
+        isActive: true,
+      },
+      orderBy: { name: 'asc' },
+    })
 
-  return res.json(alerts.filter((item) => item.quantityOnHand <= item.minQuantity))
+    return res.json(alerts.filter((item) => item.quantityOnHand <= item.minQuantity))
+  } catch (error) {
+    if (isStockStorageNotReadyError(error)) {
+      return res.json([])
+    }
+    return res.status(500).json({ message: 'Could not load stock alerts' })
+  }
 })
 
 if (isProduction) {

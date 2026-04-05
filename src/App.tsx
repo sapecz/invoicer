@@ -336,7 +336,7 @@ const emptyStockMovementForm: StockMovementForm = {
   type: 'in',
   quantity: '',
   unitCost: '',
-  sourceType: 'manual_delivery',
+  sourceType: '',
   sourceRef: '',
   note: '',
 }
@@ -1652,6 +1652,10 @@ function App() {
         adjustPlus: 'Korekce +',
         adjustMinus: 'Korekce -',
         manualDelivery: 'Manuální dodávka',
+        sourceInvoice: 'Faktura',
+        sourceDocument: 'Doklad',
+        sourceOrder: 'Objednávka',
+        sourceCorrection: 'Korekce',
         movementSaved: 'Pohyb uložen.',
         itemSaved: 'Položka uložena.',
         activate: 'Aktivovat',
@@ -1691,6 +1695,10 @@ function App() {
         adjustPlus: 'Korrektur +',
         adjustMinus: 'Korrektur -',
         manualDelivery: 'Manuelle Lieferung',
+        sourceInvoice: 'Rechnung',
+        sourceDocument: 'Beleg',
+        sourceOrder: 'Auftrag',
+        sourceCorrection: 'Korrektur',
         movementSaved: 'Bewegung gespeichert.',
         itemSaved: 'Artikel gespeichert.',
         activate: 'Aktivieren',
@@ -1730,6 +1738,10 @@ function App() {
         adjustPlus: 'Корректировка +',
         adjustMinus: 'Корректировка -',
         manualDelivery: 'Ручная поставка',
+        sourceInvoice: 'Счет',
+        sourceDocument: 'Документ',
+        sourceOrder: 'Заказ',
+        sourceCorrection: 'Корректировка',
         movementSaved: 'Движение сохранено.',
         itemSaved: 'Позиция сохранена.',
         activate: 'Активировать',
@@ -1768,6 +1780,10 @@ function App() {
       adjustPlus: 'Adjustment +',
       adjustMinus: 'Adjustment -',
       manualDelivery: 'Manual delivery',
+      sourceInvoice: 'Invoice',
+      sourceDocument: 'Document',
+      sourceOrder: 'Order',
+      sourceCorrection: 'Correction',
       movementSaved: 'Movement saved.',
       itemSaved: 'Item saved.',
       activate: 'Activate',
@@ -5148,11 +5164,17 @@ function App() {
               </label>
               <label>
                 {warehouseUiText.sourceType}
-                <input
+                <select
                   value={stockMovementForm.sourceType}
                   onChange={(event) => setStockMovementForm((prev) => ({ ...prev, sourceType: event.target.value }))}
-                  placeholder={warehouseUiText.manualDelivery}
-                />
+                >
+                  <option value="">--</option>
+                  <option value="manual_delivery">{warehouseUiText.manualDelivery}</option>
+                  <option value="invoice">{warehouseUiText.sourceInvoice}</option>
+                  <option value="document">{warehouseUiText.sourceDocument}</option>
+                  <option value="order">{warehouseUiText.sourceOrder}</option>
+                  <option value="correction">{warehouseUiText.sourceCorrection}</option>
+                </select>
               </label>
               <label>
                 {warehouseUiText.sourceRef}
