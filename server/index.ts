@@ -750,20 +750,24 @@ app.get('/api/account', async (req, res) => {
   }
 
   try {
-    const result = await prisma.$queryRawUnsafe<Array<{ bankAccount: string | null; logoDataUrl: string | null; companyIc: string | null }>>(
-      'SELECT bankAccount, logoDataUrl, companyIc FROM User WHERE id = ? LIMIT 1',
-      userId,
-    )
+    const row = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        bankAccount: true,
+        logoDataUrl: true,
+        companyIc: true,
+      },
+    })
 
-    const row = result[0] ?? { bankAccount: null, logoDataUrl: null, companyIc: null }
-    const storedProfile = parseStoredAccountProfile(row.bankAccount)
+    const safeRow = row ?? { bankAccount: null, logoDataUrl: null, companyIc: null }
+    const storedProfile = parseStoredAccountProfile(safeRow.bankAccount)
     return res.json({
-      bankAccount: storedProfile.bankAccounts[0]?.accountNumber ?? row.bankAccount,
+      bankAccount: storedProfile.bankAccounts[0]?.accountNumber ?? safeRow.bankAccount,
       bankAccounts: storedProfile.bankAccounts,
       isVatPayer: storedProfile.isVatPayer,
       requiresControlStatement: storedProfile.requiresControlStatement,
-      logoDataUrl: row.logoDataUrl,
-      companyIc: row.companyIc,
+      logoDataUrl: safeRow.logoDataUrl,
+      companyIc: safeRow.companyIc,
     })
   } catch {
     // Compatibility fallback when Prisma Client is stale or columns do not exist yet.
@@ -798,13 +802,14 @@ app.put('/api/account', async (req, res) => {
       requiresControlStatement: Boolean(parsed.data.isVatPayer) && Boolean(parsed.data.requiresControlStatement),
     })
 
-    await prisma.$executeRawUnsafe(
-      'UPDATE User SET bankAccount = ?, logoDataUrl = ?, companyIc = ? WHERE id = ?',
-      normalizedAccounts.length > 0 ? serializedBankAccounts : fallbackAccount,
-      parsed.data.logoDataUrl || null,
-      parsed.data.companyIc || null,
-      userId,
-    )
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        bankAccount: normalizedAccounts.length > 0 ? serializedBankAccounts : fallbackAccount,
+        logoDataUrl: parsed.data.logoDataUrl || null,
+        companyIc: parsed.data.companyIc || null,
+      },
+    })
 
     return res.json({
       bankAccount: fallbackAccount,
