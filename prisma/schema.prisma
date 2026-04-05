@@ -62,6 +62,8 @@ model User {
   orders                  Order[]
   projects                Project[]
   receivedDocuments       ReceivedDocument[]
+  stockItems              StockItem[]
+  stockMovements          StockMovement[]
 }
 
 model ReceivedDocument {
@@ -138,4 +140,43 @@ model Project {
   archived  Boolean       @default(false)
   createdAt DateTime      @default(now())
   items     InvoiceItem[]
+}
+
+model StockItem {
+  id              Int             @id @default(autoincrement())
+  userId          Int
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sku             String
+  name            String
+  unit            String          @default("ks")
+  minQuantity     Float           @default(0)
+  quantityOnHand  Float           @default(0)
+  averageUnitCost Float           @default(0)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  movements       StockMovement[]
+
+  @@unique([userId, sku])
+  @@index([userId, name])
+  @@index([userId, quantityOnHand])
+}
+
+model StockMovement {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stockItemId Int
+  stockItem  StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  type       String
+  quantity   Float
+  unitCost   Float
+  totalCost  Float
+  sourceType String?   // manual_delivery, invoice, document, order, correction
+  sourceRef  String?
+  note       String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([stockItemId, createdAt])
 }

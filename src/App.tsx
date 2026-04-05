@@ -6,8 +6,20 @@ import './App.css'
 
 type Language = 'en' | 'cz' | 'ger' | 'ru'
 type Theme = 'light' | 'dark'
-type MenuSection = 'invoices' | 'orders' | 'projects' | 'customers' | 'documents' | 'account' | 'taxes' | 'reports'
-type SubmenuKey = 'new' | 'unpaid' | 'active' | 'history' | 'current' | 'contacts' | 'stored'
+type MenuSection = 'invoices' | 'orders' | 'projects' | 'customers' | 'documents' | 'warehouse' | 'account' | 'taxes' | 'reports'
+type SubmenuKey =
+  | 'new'
+  | 'unpaid'
+  | 'active'
+  | 'history'
+  | 'current'
+  | 'contacts'
+  | 'stored'
+  | 'warehouseItems'
+  | 'warehouseMove'
+  | 'warehouseStock'
+  | 'warehouseHistory'
+  | 'warehouseAlerts'
 type PeriodRange = 'month' | 'quarter' | 'year' | 'all'
 type CzechVatOption = '21' | '12' | '0'
 
@@ -189,6 +201,57 @@ type ProjectForm = {
   currency: string
 }
 
+type StockItem = {
+  id: number
+  userId: number
+  sku: string
+  name: string
+  unit: string
+  minQuantity: number
+  quantityOnHand: number
+  averageUnitCost: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+type StockMovement = {
+  id: number
+  userId: number
+  stockItemId: number
+  stockItem: {
+    id: number
+    sku: string
+    name: string
+    unit: string
+  }
+  type: 'in' | 'out' | 'adjust_plus' | 'adjust_minus'
+  quantity: number
+  unitCost: number
+  totalCost: number
+  sourceType: string | null
+  sourceRef: string | null
+  note: string | null
+  createdAt: string
+}
+
+type StockItemForm = {
+  sku: string
+  name: string
+  unit: string
+  minQuantity: string
+}
+
+type StockMovementForm = {
+  stockItemId: number | null
+  type: 'in' | 'out' | 'adjust_plus' | 'adjust_minus'
+  quantity: string
+  unitCost: string
+  sourceType: string
+  sourceRef: string
+  note: string
+}
+
 type ReceivedDocument = {
   id: number
   userId: number
@@ -259,6 +322,23 @@ const emptyDocumentForm: DocumentForm = {
   totalAmount: '',
   vatRate: '',
   extractedText: '',
+}
+
+const emptyStockItemForm: StockItemForm = {
+  sku: '',
+  name: '',
+  unit: 'ks',
+  minQuantity: '0',
+}
+
+const emptyStockMovementForm: StockMovementForm = {
+  stockItemId: null,
+  type: 'in',
+  quantity: '',
+  unitCost: '',
+  sourceType: 'manual_delivery',
+  sourceRef: '',
+  note: '',
 }
 
 type Translation = {
@@ -1104,6 +1184,14 @@ function App() {
   const [projectForm, setProjectForm] = useState<ProjectForm>(emptyProjectForm)
   const [projectSaving, setProjectSaving] = useState(false)
   const [projectSaveMsg, setProjectSaveMsg] = useState('')
+  const [stockItems, setStockItems] = useState<StockItem[]>([])
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
+  const [stockAlerts, setStockAlerts] = useState<StockItem[]>([])
+  const [stockItemForm, setStockItemForm] = useState<StockItemForm>(emptyStockItemForm)
+  const [stockMovementForm, setStockMovementForm] = useState<StockMovementForm>(emptyStockMovementForm)
+  const [stockSavingItem, setStockSavingItem] = useState(false)
+  const [stockSavingMovement, setStockSavingMovement] = useState(false)
+  const [stockMessage, setStockMessage] = useState('')
   const [reportInvoices, setReportInvoices] = useState<Invoice[]>([])
   const [reportOrders, setReportOrders] = useState<Order[]>([])
   const [reportProjects, setReportProjects] = useState<Project[]>([])
@@ -1466,6 +1554,10 @@ function App() {
         order: 'Objednávka',
         finalUsage: 'Konečné čerpání',
         created: 'Vytvořeno',
+        remainingDays: 'Zbývající dny',
+        remainingBudget: 'Zbývající rozpočet',
+        MDRate: 'Sazba MD',
+        couldNotLoadDocuments: 'Nepodařilo se načíst doklady',
         companyIds: 'Firemní identifikace',
         address: 'Adresa',
         contact: 'Kontakt',
@@ -1527,6 +1619,162 @@ function App() {
     }
   }, [language])
 
+  const warehouseUiText = useMemo(() => {
+    if (language === 'cz') {
+      return {
+        menu: 'Sklad',
+        items: 'Položky',
+        newMovement: 'Nový pohyb',
+        stockState: 'Stav skladu',
+        history: 'Historie pohybů',
+        alerts: 'Pod minimem',
+        sku: 'Kód položky (SKU)',
+        itemName: 'Název položky',
+        unit: 'Jednotka',
+        minQty: 'Min. množství',
+        saveItem: 'Uložit položku',
+        movementType: 'Typ pohybu',
+        movementQty: 'Množství',
+        unitCost: 'Jednotková cena',
+        sourceType: 'Zdroj',
+        sourceRef: 'Reference',
+        note: 'Poznámka',
+        saveMovement: 'Uložit pohyb',
+        noItems: 'Zatím nejsou žádné skladové položky.',
+        noMovements: 'Zatím nejsou žádné pohyby.',
+        noAlerts: 'Žádné položky pod minimem.',
+        onHand: 'Skladem',
+        avgCost: 'Průměrná cena',
+        stockValue: 'Hodnota zásoby',
+        totalStockValue: 'Celková hodnota skladu',
+        incoming: 'Příjem',
+        outgoing: 'Výdej',
+        adjustPlus: 'Korekce +',
+        adjustMinus: 'Korekce -',
+        manualDelivery: 'Manuální dodávka',
+        movementSaved: 'Pohyb uložen.',
+        itemSaved: 'Položka uložena.',
+        activate: 'Aktivovat',
+        deactivate: 'Deaktivovat',
+      }
+    }
+
+    if (language === 'ger') {
+      return {
+        menu: 'Lager',
+        items: 'Artikel',
+        newMovement: 'Neue Bewegung',
+        stockState: 'Lagerbestand',
+        history: 'Bewegungshistorie',
+        alerts: 'Unter Minimum',
+        sku: 'Artikelcode (SKU)',
+        itemName: 'Artikelname',
+        unit: 'Einheit',
+        minQty: 'Mindestmenge',
+        saveItem: 'Artikel speichern',
+        movementType: 'Bewegungstyp',
+        movementQty: 'Menge',
+        unitCost: 'Stückpreis',
+        sourceType: 'Quelle',
+        sourceRef: 'Referenz',
+        note: 'Notiz',
+        saveMovement: 'Bewegung speichern',
+        noItems: 'Noch keine Lagerartikel.',
+        noMovements: 'Noch keine Bewegungen.',
+        noAlerts: 'Keine Artikel unter Mindestmenge.',
+        onHand: 'Bestand',
+        avgCost: 'Durchschnittspreis',
+        stockValue: 'Bestandswert',
+        totalStockValue: 'Gesamter Lagerwert',
+        incoming: 'Eingang',
+        outgoing: 'Ausgang',
+        adjustPlus: 'Korrektur +',
+        adjustMinus: 'Korrektur -',
+        manualDelivery: 'Manuelle Lieferung',
+        movementSaved: 'Bewegung gespeichert.',
+        itemSaved: 'Artikel gespeichert.',
+        activate: 'Aktivieren',
+        deactivate: 'Deaktivieren',
+      }
+    }
+
+    if (language === 'ru') {
+      return {
+        menu: 'Склад',
+        items: 'Позиции',
+        newMovement: 'Новое движение',
+        stockState: 'Остатки',
+        history: 'История движений',
+        alerts: 'Ниже минимума',
+        sku: 'Код (SKU)',
+        itemName: 'Название позиции',
+        unit: 'Ед. изм.',
+        minQty: 'Мин. количество',
+        saveItem: 'Сохранить позицию',
+        movementType: 'Тип движения',
+        movementQty: 'Количество',
+        unitCost: 'Цена за единицу',
+        sourceType: 'Источник',
+        sourceRef: 'Ссылка',
+        note: 'Примечание',
+        saveMovement: 'Сохранить движение',
+        noItems: 'Складских позиций пока нет.',
+        noMovements: 'Движений пока нет.',
+        noAlerts: 'Нет позиций ниже минимума.',
+        onHand: 'На складе',
+        avgCost: 'Средняя цена',
+        stockValue: 'Стоимость остатка',
+        totalStockValue: 'Общая стоимость склада',
+        incoming: 'Приход',
+        outgoing: 'Расход',
+        adjustPlus: 'Корректировка +',
+        adjustMinus: 'Корректировка -',
+        manualDelivery: 'Ручная поставка',
+        movementSaved: 'Движение сохранено.',
+        itemSaved: 'Позиция сохранена.',
+        activate: 'Активировать',
+        deactivate: 'Деактивировать',
+      }
+    }
+
+    return {
+      menu: 'Warehouse',
+      items: 'Items',
+      newMovement: 'New movement',
+      stockState: 'Stock state',
+      history: 'Movement history',
+      alerts: 'Below minimum',
+      sku: 'Item code (SKU)',
+      itemName: 'Item name',
+      unit: 'Unit',
+      minQty: 'Minimum quantity',
+      saveItem: 'Save item',
+      movementType: 'Movement type',
+      movementQty: 'Quantity',
+      unitCost: 'Unit cost',
+      sourceType: 'Source type',
+      sourceRef: 'Source reference',
+      note: 'Note',
+      saveMovement: 'Save movement',
+      noItems: 'No stock items yet.',
+      noMovements: 'No movements yet.',
+      noAlerts: 'No items below minimum.',
+      onHand: 'On hand',
+      avgCost: 'Average cost',
+      stockValue: 'Stock value',
+      totalStockValue: 'Total stock value',
+      incoming: 'Incoming',
+      outgoing: 'Outgoing',
+      adjustPlus: 'Adjustment +',
+      adjustMinus: 'Adjustment -',
+      manualDelivery: 'Manual delivery',
+      movementSaved: 'Movement saved.',
+      itemSaved: 'Item saved.',
+      activate: 'Activate',
+      deactivate: 'Deactivate',
+    }
+  }, [language])
+
   const submenuLabels: Record<SubmenuKey, string> = {
     new: t.newSubmenu,
     unpaid: t.unpaidSubmenu,
@@ -1535,6 +1783,11 @@ function App() {
     current: t.currentSubmenu,
     contacts: t.contactsSubmenu,
     stored: t.storedSubmenu,
+    warehouseItems: warehouseUiText.items,
+    warehouseMove: warehouseUiText.newMovement,
+    warehouseStock: warehouseUiText.stockState,
+    warehouseHistory: warehouseUiText.history,
+    warehouseAlerts: warehouseUiText.alerts,
   }
 
   const menuItems: Array<{ key: MenuSection; label: string; submenus: SubmenuKey[] }> = [
@@ -1543,6 +1796,7 @@ function App() {
     { key: 'projects', label: t.projects, submenus: ['new', 'current', 'history'] },
     { key: 'customers', label: t.customers, submenus: ['new', 'contacts'] },
     { key: 'documents', label: t.documents, submenus: ['new', 'stored'] },
+    { key: 'warehouse', label: warehouseUiText.menu, submenus: ['warehouseItems', 'warehouseMove', 'warehouseStock', 'warehouseHistory', 'warehouseAlerts'] },
     { key: 'taxes', label: t.taxes, submenus: ['current', 'history'] },
     { key: 'reports', label: t.reports, submenus: ['current'] },
   ]
@@ -1812,13 +2066,12 @@ function App() {
     ])
     const supplierName = /^(proforma|faktura|invoice|da[ňn]ov[ýy]\s+doklad)/i.test(supplierNameRaw.trim()) ? '' : supplierNameRaw
     const supplierIcFromBlock = findFirstMatch(supplierBlock || normalized, [
-      /i[čc]\s*[:]?\s*([0-9][0-9\s]{5,15})/i,
-      /ic\s*[:]?\s*([0-9][0-9\s]{5,15})/i,
+      /(?:i[čc]o?|ico|ic)\s*[:]?\s*([0-9][0-9\s]{5,15})/i,
     ])
     const supplierIcNearProfile = findFirstMatch(normalizedInline, [
-      /i[čc]\s*[:]?\s*([0-9][0-9\s]{5,15})\s*(?:odb[ěe]ratel|d[íi]č|tel|fax|e-mail)/i,
+      /(?:i[čc]o?|ico|ic)\s*[:]?\s*([0-9][0-9\s]{5,15})\s*(?:odb[ěe]ratel|d[íi]č|tel|fax|e-mail)/i,
     ])
-    const allIcMatches = Array.from(normalizedInline.matchAll(/i[čc]\s*[:]?\s*([0-9][0-9\s]{5,15})/gi))
+    const allIcMatches = Array.from(normalizedInline.matchAll(/(?:i[čc]o?|ico|ic)\s*[:]?\s*([0-9][0-9\s]{5,15})/gi))
       .map((m) => m[1].replace(/\D/g, ''))
       .filter((ic) => ic.length >= 6 && ic.length <= 12)
     const normalizedSupplierIcFromBlock = supplierIcFromBlock.replace(/\D/g, '')
@@ -1829,7 +2082,7 @@ function App() {
     const supplierIcFallback = customerIcsOnly[0] || allIcMatches[0] || ''
     const supplierIc = normalizedSupplierIcFromBlock || normalizedSupplierIcNearProfile || supplierIcFallback
 
-    const invoiceNumber = findFirstMatch(normalized, [
+    const invoiceNumberRaw = findFirstMatch(normalized, [
       /^\s*([0-9]{6,})\s+faktura/i,
       /(?:č[íi]slo\s+faktury|faktura\s*č\.?|invoice\s*(?:no\.?|number))\s*[:]?\s*([a-z0-9\-\/]+)/i,
       /vs[:\s]*([0-9]{4,20})/i,
@@ -1850,12 +2103,14 @@ function App() {
       /constant\s+symbol\s*[:]?\s*([0-9]{1,20})/i,
     ])
 
-    const issueDateRaw = findFirstMatch(normalized, [
-      /datum\s+v?ystaven[íi]\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
+    const issueDateRaw = findFirstMatch(normalizedInline, [
+      /datum\s*v?ystaven[íi]\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
+      /datumv?ystaven[íi]\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
       /issue\s+date\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
     ])
-    const dueDateRaw = findFirstMatch(normalized, [
+    const dueDateRaw = findFirstMatch(normalizedInline, [
       /datum\s+splatnosti\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
+      /datumsplatnosti\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
       /due\s+date\s*[:]?\s*(\d{1,2}[\.\s-]\d{1,2}[\.\s-]\d{4}|\d{4}[\.\s-]\d{1,2}[\.\s-]\d{1,2})/i,
     ])
     
@@ -1874,14 +2129,20 @@ function App() {
     }
 
     const totalRaw = findFirstMatch(normalizedInline, [
+      /uhrad[ťt]e?\s+pros[íi]m\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /celek(?:em)?\s+k\s*[úu]hrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /celek(?:em)?\s+s\s+dph\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /k\s*uhrad[ěe]\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
       /(?:celkem|total)\s*[:]?\s*([0-9\s.,]+)\s*(?:kč|czk)?/i,
     ])
-    const vatRaw = findFirstMatch(normalizedInline, [
+    const vatRateRaw = findFirstMatch(normalizedInline, [
       /dph\s*([0-9]+)\s*%/i,
       /vat\s*([0-9]+)\s*%/i,
+      /sazba\s+dph\s*[:]?\s*([0-9]{1,2})/i,
+    ])
+    const vatAmountRaw = findFirstMatch(normalizedInline, [
+      /dph\s*(?:částka|castka|amount)?\s*[:]?\s*([0-9\s.,]+)/i,
+      /vat\s*(?:amount)?\s*[:]?\s*([0-9\s.,]+)/i,
       /(?:dph|vat)[:\s]*([0-9.,]+)/i,
     ])
     const baseRaw = findFirstMatch(normalizedInline, [
@@ -1905,8 +2166,13 @@ function App() {
     const matchedCustomer = matchedByIc ?? matchedByName ?? null
 
     const normalizedTotal = totalRaw ? normalizeAmount(totalRaw) : ''
-    const normalizedVat = hasNoVat ? '0' : vatRaw ? normalizeAmount(vatRaw) : ''
+    const normalizedVatAmount = hasNoVat ? '0' : vatAmountRaw ? normalizeAmount(vatAmountRaw) : ''
+    const normalizedVatRate = hasNoVat ? '0' : vatRateRaw ? normalizeAmount(vatRateRaw) : ''
     const normalizedBase = baseRaw ? normalizeAmount(baseRaw) : hasNoVat && normalizedTotal ? normalizedTotal : ''
+    const invoiceNumber =
+      invoiceNumberRaw && (invoiceNumberRaw.length >= 4 || /\d/.test(invoiceNumberRaw))
+        ? invoiceNumberRaw
+        : variableSymbol || ''
 
     const extractedFields: Array<keyof DocumentForm> = ['fileName', 'sourceType', 'extractedText']
     if (supplierName) extractedFields.push('supplierName')
@@ -1919,9 +2185,9 @@ function App() {
     if (normalizeDate(resolvedDueDate)) extractedFields.push('dueDate')
     if (currency) extractedFields.push('currency')
     if (normalizedTotal) extractedFields.push('totalAmount')
-    if (normalizedVat) extractedFields.push('vatAmount')
+    if (normalizedVatAmount) extractedFields.push('vatAmount')
     if (normalizedBase) extractedFields.push('baseAmount')
-    if (hasNoVat) extractedFields.push('vatRate')
+    if (normalizedVatRate) extractedFields.push('vatRate')
 
     setDocumentAutofilledFields(Array.from(new Set(extractedFields)))
     setDocumentMatchedCustomer(matchedCustomer)
@@ -1940,9 +2206,9 @@ function App() {
       dueDate: normalizeDate(resolvedDueDate) || prev.dueDate,
       currency,
       totalAmount: normalizedTotal || prev.totalAmount,
-      vatAmount: normalizedVat || prev.vatAmount,
+      vatAmount: normalizedVatAmount || prev.vatAmount,
       baseAmount: normalizedBase || prev.baseAmount,
-      vatRate: hasNoVat ? '0' : prev.vatRate,
+      vatRate: normalizedVatRate || prev.vatRate,
       extractedText: text,
     }))
   }
@@ -3437,6 +3703,139 @@ function App() {
     }
   }
 
+  async function loadStockItems(currentToken: string) {
+    const res = await fetch(apiUrl(withSelectedUserFilter('/api/stock/items')), {
+      headers: { Authorization: `Bearer ${currentToken}` },
+    })
+    if (!res.ok) {
+      throw new Error('Could not load stock items')
+    }
+    const data = (await res.json()) as StockItem[]
+    setStockItems(data)
+  }
+
+  async function loadStockMovements(currentToken: string) {
+    const res = await fetch(apiUrl(withSelectedUserFilter('/api/stock/movements')), {
+      headers: { Authorization: `Bearer ${currentToken}` },
+    })
+    if (!res.ok) {
+      throw new Error('Could not load stock movements')
+    }
+    const data = (await res.json()) as StockMovement[]
+    setStockMovements(data)
+  }
+
+  async function loadStockAlerts(currentToken: string) {
+    const res = await fetch(apiUrl(withSelectedUserFilter('/api/stock/alerts')), {
+      headers: { Authorization: `Bearer ${currentToken}` },
+    })
+    if (!res.ok) {
+      throw new Error('Could not load stock alerts')
+    }
+    const data = (await res.json()) as StockItem[]
+    setStockAlerts(data)
+  }
+
+  async function handleSaveStockItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token) return
+
+    setStockSavingItem(true)
+    setStockMessage('')
+    try {
+      const res = await fetch(apiUrl(withSelectedUserFilter('/api/stock/items')), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sku: stockItemForm.sku.trim(),
+          name: stockItemForm.name.trim(),
+          unit: stockItemForm.unit.trim() || 'ks',
+          minQuantity: Math.max(0, Number(stockItemForm.minQuantity) || 0),
+        }),
+      })
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null
+        throw new Error(body?.message ?? 'Could not save stock item')
+      }
+
+      setStockItemForm(emptyStockItemForm)
+      setStockMessage(warehouseUiText.itemSaved)
+      await Promise.all([loadStockItems(token), loadStockAlerts(token)])
+    } catch (err) {
+      setStockMessage(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setStockSavingItem(false)
+    }
+  }
+
+  async function handleSaveStockMovement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !stockMovementForm.stockItemId) return
+
+    setStockSavingMovement(true)
+    setStockMessage('')
+    try {
+      const res = await fetch(apiUrl(withSelectedUserFilter('/api/stock/movements')), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          stockItemId: stockMovementForm.stockItemId,
+          type: stockMovementForm.type,
+          quantity: Number(stockMovementForm.quantity),
+          unitCost: stockMovementForm.unitCost ? Number(stockMovementForm.unitCost) : undefined,
+          sourceType: stockMovementForm.sourceType || undefined,
+          sourceRef: stockMovementForm.sourceRef || undefined,
+          note: stockMovementForm.note || undefined,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null
+        throw new Error(body?.message ?? 'Could not save stock movement')
+      }
+
+      setStockMovementForm((prev) => ({
+        ...emptyStockMovementForm,
+        stockItemId: prev.stockItemId,
+      }))
+      setStockMessage(warehouseUiText.movementSaved)
+      await Promise.all([loadStockItems(token), loadStockMovements(token), loadStockAlerts(token)])
+    } catch (err) {
+      setStockMessage(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setStockSavingMovement(false)
+    }
+  }
+
+  async function handleToggleStockItemActive(item: StockItem) {
+    if (!token) return
+    setStockMessage('')
+    try {
+      const res = await fetch(apiUrl(withSelectedUserFilter(`/api/stock/items/${item.id}`)), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isActive: !item.isActive }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null
+        throw new Error(body?.message ?? 'Could not update stock item')
+      }
+      await Promise.all([loadStockItems(token), loadStockAlerts(token)])
+    } catch (err) {
+      setStockMessage(err instanceof Error ? err.message : 'Error')
+    }
+  }
+
   async function loadAdminUsers(currentToken: string) {
     const res = await fetch(apiUrl('/api/users'), {
       headers: { Authorization: `Bearer ${currentToken}` },
@@ -3813,6 +4212,24 @@ function App() {
   }, [token, activeSection, activeSubmenu])
 
   useEffect(() => {
+    if (!token || activeSection !== 'warehouse') {
+      return
+    }
+
+    void Promise.all([loadStockItems(token), loadStockAlerts(token)]).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Unknown API error'
+      setStockMessage(message)
+    })
+
+    if (activeSubmenu === 'warehouseHistory' || activeSubmenu === 'warehouseMove') {
+      void loadStockMovements(token).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unknown API error'
+        setStockMessage(message)
+      })
+    }
+  }, [token, activeSection, activeSubmenu, selectedAdminUserId, user?.isAdmin])
+
+  useEffect(() => {
     if (!token || (activeSection !== 'reports' && activeSection !== 'taxes')) {
       return
     }
@@ -3863,6 +4280,7 @@ function App() {
     setDocumentMessage('')
     setCustomerSaveMsg('')
     setAresMessage('')
+    setStockMessage('')
   }, [activeSection, activeSubmenu])
 
   function handleMenuSelect(section: MenuSection) {
@@ -4586,6 +5004,266 @@ function App() {
           {accountMessage && <p className="error">{accountMessage}</p>}
         </section>
       )
+    }
+
+    if (activeSection === 'warehouse') {
+      const stockCurrency = accountProfile.bankAccounts[0]?.currency || 'CZK'
+      const totalStockValue = stockItems.reduce((sum, item) => sum + item.quantityOnHand * item.averageUnitCost, 0)
+      const movementTypeLabels: Record<StockMovement['type'], string> = {
+        in: warehouseUiText.incoming,
+        out: warehouseUiText.outgoing,
+        adjust_plus: warehouseUiText.adjustPlus,
+        adjust_minus: warehouseUiText.adjustMinus,
+      }
+
+      if (activeSubmenu === 'warehouseItems') {
+        return (
+          <section className="card">
+            <h2>{warehouseUiText.menu} / {warehouseUiText.items}</h2>
+            <form className="project-form" onSubmit={(event) => void handleSaveStockItem(event)}>
+              <label>
+                {warehouseUiText.sku} *
+                <input
+                  value={stockItemForm.sku}
+                  onChange={(event) => setStockItemForm((prev) => ({ ...prev, sku: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                {warehouseUiText.itemName} *
+                <input
+                  value={stockItemForm.name}
+                  onChange={(event) => setStockItemForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                {warehouseUiText.unit}
+                <input
+                  value={stockItemForm.unit}
+                  onChange={(event) => setStockItemForm((prev) => ({ ...prev, unit: event.target.value }))}
+                />
+              </label>
+              <label>
+                {warehouseUiText.minQty}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={stockItemForm.minQuantity}
+                  onChange={(event) => setStockItemForm((prev) => ({ ...prev, minQuantity: event.target.value }))}
+                />
+              </label>
+              <button type="submit" disabled={stockSavingItem} className="span-all">
+                {stockSavingItem ? accountUiText.saving : warehouseUiText.saveItem}
+              </button>
+            </form>
+
+            <div className="report-panel documents-panel">
+              {stockItems.length === 0 ? (
+                <p className="empty">{warehouseUiText.noItems}</p>
+              ) : (
+                <ul className="invoice-list">
+                  {stockItems.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <p className="customer">{item.name} ({item.sku})</p>
+                        <p className="meta">
+                          {warehouseUiText.onHand}: {item.quantityOnHand.toFixed(2)} {item.unit} · {warehouseUiText.avgCost}: {item.averageUnitCost.toFixed(2)} {stockCurrency}
+                        </p>
+                        <p className="meta">{warehouseUiText.minQty}: {item.minQuantity.toFixed(2)} {item.unit}</p>
+                      </div>
+                      <div className="right action-stack" onClick={(event) => event.stopPropagation()}>
+                        <button className="icon-delete" type="button" onClick={() => void handleToggleStockItemActive(item)}>
+                          {item.isActive ? warehouseUiText.deactivate : warehouseUiText.activate}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {stockMessage && <p className="error">{stockMessage}</p>}
+          </section>
+        )
+      }
+
+      if (activeSubmenu === 'warehouseMove') {
+        return (
+          <section className="card">
+            <h2>{warehouseUiText.menu} / {warehouseUiText.newMovement}</h2>
+            <form className="project-form" onSubmit={(event) => void handleSaveStockMovement(event)}>
+              <label>
+                {warehouseUiText.items} *
+                <select
+                  value={stockMovementForm.stockItemId ?? ''}
+                  onChange={(event) =>
+                    setStockMovementForm((prev) => ({
+                      ...prev,
+                      stockItemId: event.target.value ? Number(event.target.value) : null,
+                    }))
+                  }
+                  required
+                >
+                  <option value="">--</option>
+                  {stockItems.filter((item) => item.isActive).map((item) => (
+                    <option key={item.id} value={item.id}>{item.name} ({item.sku})</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {warehouseUiText.movementType}
+                <select
+                  value={stockMovementForm.type}
+                  onChange={(event) =>
+                    setStockMovementForm((prev) => ({ ...prev, type: event.target.value as StockMovementForm['type'] }))
+                  }
+                >
+                  <option value="in">{warehouseUiText.incoming}</option>
+                  <option value="out">{warehouseUiText.outgoing}</option>
+                  <option value="adjust_plus">{warehouseUiText.adjustPlus}</option>
+                  <option value="adjust_minus">{warehouseUiText.adjustMinus}</option>
+                </select>
+              </label>
+              <label>
+                {warehouseUiText.movementQty} *
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={stockMovementForm.quantity}
+                  onChange={(event) => setStockMovementForm((prev) => ({ ...prev, quantity: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                {warehouseUiText.unitCost}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={stockMovementForm.unitCost}
+                  onChange={(event) => setStockMovementForm((prev) => ({ ...prev, unitCost: event.target.value }))}
+                />
+              </label>
+              <label>
+                {warehouseUiText.sourceType}
+                <input
+                  value={stockMovementForm.sourceType}
+                  onChange={(event) => setStockMovementForm((prev) => ({ ...prev, sourceType: event.target.value }))}
+                  placeholder={warehouseUiText.manualDelivery}
+                />
+              </label>
+              <label>
+                {warehouseUiText.sourceRef}
+                <input
+                  value={stockMovementForm.sourceRef}
+                  onChange={(event) => setStockMovementForm((prev) => ({ ...prev, sourceRef: event.target.value }))}
+                />
+              </label>
+              <label className="span-all">
+                {warehouseUiText.note}
+                <input
+                  value={stockMovementForm.note}
+                  onChange={(event) => setStockMovementForm((prev) => ({ ...prev, note: event.target.value }))}
+                />
+              </label>
+              <button type="submit" disabled={stockSavingMovement} className="span-all">
+                {stockSavingMovement ? accountUiText.saving : warehouseUiText.saveMovement}
+              </button>
+            </form>
+            {stockMessage && <p className="error">{stockMessage}</p>}
+          </section>
+        )
+      }
+
+      if (activeSubmenu === 'warehouseStock') {
+        return (
+          <section className="card">
+            <h2>{warehouseUiText.menu} / {warehouseUiText.stockState}</h2>
+            <p className="meta">
+              {warehouseUiText.totalStockValue}: <strong>{formatMoney(totalStockValue, stockCurrency)}</strong>
+            </p>
+            <div className="report-panel documents-panel">
+              {stockItems.length === 0 ? (
+                <p className="empty">{warehouseUiText.noItems}</p>
+              ) : (
+                <ul className="invoice-list">
+                  {stockItems.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <p className="customer">{item.name} ({item.sku})</p>
+                        <p className="meta">
+                          {warehouseUiText.onHand}: {item.quantityOnHand.toFixed(2)} {item.unit} · {warehouseUiText.stockValue}: {formatMoney(item.quantityOnHand * item.averageUnitCost, stockCurrency)}
+                        </p>
+                        <p className="meta">{warehouseUiText.avgCost}: {item.averageUnitCost.toFixed(2)} {stockCurrency}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {stockMessage && <p className="error">{stockMessage}</p>}
+          </section>
+        )
+      }
+
+      if (activeSubmenu === 'warehouseHistory') {
+        return (
+          <section className="card">
+            <h2>{warehouseUiText.menu} / {warehouseUiText.history}</h2>
+            <div className="report-panel documents-panel">
+              {stockMovements.length === 0 ? (
+                <p className="empty">{warehouseUiText.noMovements}</p>
+              ) : (
+                <ul className="invoice-list">
+                  {stockMovements.map((movement) => (
+                    <li key={movement.id}>
+                      <div>
+                        <p className="customer">
+                          {movement.stockItem.name} ({movement.stockItem.sku}) · {movementTypeLabels[movement.type]}
+                        </p>
+                        <p className="meta">
+                          {movement.quantity.toFixed(2)} {movement.stockItem.unit} · {movement.unitCost.toFixed(2)} {stockCurrency} · {new Date(movement.createdAt).toLocaleString()}
+                        </p>
+                        <p className="meta">{movement.note || '-'}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {stockMessage && <p className="error">{stockMessage}</p>}
+          </section>
+        )
+      }
+
+      if (activeSubmenu === 'warehouseAlerts') {
+        return (
+          <section className="card">
+            <h2>{warehouseUiText.menu} / {warehouseUiText.alerts}</h2>
+            <div className="report-panel documents-panel">
+              {stockAlerts.length === 0 ? (
+                <p className="empty">{warehouseUiText.noAlerts}</p>
+              ) : (
+                <ul className="invoice-list">
+                  {stockAlerts.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <p className="customer">{item.name} ({item.sku})</p>
+                        <p className="meta">
+                          {warehouseUiText.onHand}: {item.quantityOnHand.toFixed(2)} {item.unit} · {warehouseUiText.minQty}: {item.minQuantity.toFixed(2)} {item.unit}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {stockMessage && <p className="error">{stockMessage}</p>}
+          </section>
+        )
+      }
     }
 
     if (activeSection === 'invoices' && activeSubmenu === 'new') {
@@ -6022,7 +6700,7 @@ function App() {
           <section className="workspace-main">{renderSectionContent()}</section>
         </section>
       )}
-      <footer className="app-version">Verze 0.13</footer>
+      <footer className="app-version">Verze 0.14</footer>
     </main>
   )
 }

@@ -1547,6 +1547,33 @@ const createProjectSchema = z.object({
   }
 })
 
+const stockMovementTypeSchema = z.enum(['in', 'out', 'adjust_plus', 'adjust_minus'])
+
+const createStockItemSchema = z.object({
+  sku: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(200),
+  unit: z.string().trim().min(1).max(20).default('ks'),
+  minQuantity: z.number().min(0).default(0),
+  isActive: z.boolean().optional(),
+})
+
+const updateStockItemSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  unit: z.string().trim().min(1).max(20).optional(),
+  minQuantity: z.number().min(0).optional(),
+  isActive: z.boolean().optional(),
+})
+
+const createStockMovementSchema = z.object({
+  stockItemId: z.number().int().positive(),
+  type: stockMovementTypeSchema,
+  quantity: z.number().positive(),
+  unitCost: z.number().min(0).optional(),
+  sourceType: z.string().trim().min(1).max(40).optional(),
+  sourceRef: z.string().trim().min(1).max(120).optional(),
+  note: z.string().trim().max(500).optional(),
+})
+
 app.get('/api/projects', async (req, res) => {
   const auth = await getAuthContext(req)
   if (!auth) {
@@ -1622,6 +1649,245 @@ app.delete('/api/projects/:id', async (req, res) => {
   await prisma.project.delete({ where: { id } })
   await recomputeProjectUsage(project.userId)
   return res.json({ ok: true })
+})
+
+// ---- Stock ----
+
+app.get('/api/stock/items', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
+
+  const items = await prisma.stockItem.findMany({
+    where: {
+      ...(scopedUserId ? { userId: scopedUserId } : {}),
+    },
+    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+  })
+
+  return res.json(items)
+})
+
+app.post('/api/stock/items', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const parsed = createStockItemSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'Invalid stock item payload',
+      issues: parsed.error.flatten(),
+    })
+  }
+
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const ownerUserId = auth.isAdmin && requestedUserId ? requestedUserId : auth.userId
+
+  try {
+    const item = await prisma.stockItem.create({
+      data: {
+        userId: ownerUserId,
+        sku: parsed.data.sku,
+        name: parsed.data.name,
+        unit: parsed.data.unit,
+        minQuantity: parsed.data.minQuantity,
+        isActive: parsed.data.isActive ?? true,
+      },
+    })
+    return res.status(201).json(item)
+  } catch {
+    return res.status(400).json({ message: 'Stock item with this SKU already exists' })
+  }
+})
+
+app.patch('/api/stock/items/:id', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const id = Number(req.params.id)
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ message: 'Invalid stock item id' })
+  }
+
+  const parsed = updateStockItemSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'Invalid stock item payload',
+      issues: parsed.error.flatten(),
+    })
+  }
+
+  const item = await prisma.stockItem.findUnique({
+    where: { id },
+    select: { id: true, userId: true },
+  })
+
+  if (!item || (!auth.isAdmin && item.userId !== auth.userId)) {
+    return res.status(404).json({ message: 'Stock item not found' })
+  }
+
+  const updated = await prisma.stockItem.update({
+    where: { id },
+    data: parsed.data,
+  })
+
+  return res.json(updated)
+})
+
+app.get('/api/stock/movements', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
+  const itemId = Number(req.query.stockItemId)
+
+  const movements = await prisma.stockMovement.findMany({
+    where: {
+      ...(scopedUserId ? { userId: scopedUserId } : {}),
+      ...(Number.isFinite(itemId) && itemId > 0 ? { stockItemId: itemId } : {}),
+    },
+    include: {
+      stockItem: {
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          unit: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+  })
+
+  return res.json(movements)
+})
+
+app.post('/api/stock/movements', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const parsed = createStockMovementSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'Invalid stock movement payload',
+      issues: parsed.error.flatten(),
+    })
+  }
+
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const ownerUserId = auth.isAdmin && requestedUserId ? requestedUserId : auth.userId
+
+  const existingItem = await prisma.stockItem.findFirst({
+    where: { id: parsed.data.stockItemId, userId: ownerUserId },
+  })
+
+  if (!existingItem) {
+    return res.status(404).json({ message: 'Stock item not found' })
+  }
+
+  const qty = parsed.data.quantity
+  const prevQty = existingItem.quantityOnHand
+  const prevAvg = existingItem.averageUnitCost
+  const movementType = parsed.data.type
+
+  const isIncoming = movementType === 'in' || movementType === 'adjust_plus'
+  const isOutgoing = movementType === 'out' || movementType === 'adjust_minus'
+
+  if (isOutgoing && prevQty < qty) {
+    return res.status(400).json({ message: 'Insufficient stock. Negative stock is not allowed.' })
+  }
+
+  let resolvedUnitCost = parsed.data.unitCost ?? prevAvg
+  let newQty = prevQty
+  let newAvg = prevAvg
+
+  if (isIncoming) {
+    resolvedUnitCost = parsed.data.unitCost ?? prevAvg
+    newQty = prevQty + qty
+    const currentValue = prevQty * prevAvg
+    const incomingValue = qty * resolvedUnitCost
+    newAvg = newQty > 0 ? (currentValue + incomingValue) / newQty : 0
+  }
+
+  if (isOutgoing) {
+    resolvedUnitCost = prevAvg
+    newQty = prevQty - qty
+    newAvg = newQty > 0 ? prevAvg : 0
+  }
+
+  const totalCost = qty * resolvedUnitCost
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedItem = await tx.stockItem.update({
+      where: { id: existingItem.id },
+      data: {
+        quantityOnHand: newQty,
+        averageUnitCost: newAvg,
+      },
+    })
+
+    const movement = await tx.stockMovement.create({
+      data: {
+        userId: ownerUserId,
+        stockItemId: existingItem.id,
+        type: movementType,
+        quantity: qty,
+        unitCost: resolvedUnitCost,
+        totalCost,
+        sourceType: parsed.data.sourceType || null,
+        sourceRef: parsed.data.sourceRef || null,
+        note: parsed.data.note || null,
+      },
+      include: {
+        stockItem: {
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            unit: true,
+          },
+        },
+      },
+    })
+
+    return { updatedItem, movement }
+  })
+
+  return res.status(201).json(result)
+})
+
+app.get('/api/stock/alerts', async (req, res) => {
+  const auth = await getAuthContext(req)
+  if (!auth) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  const requestedUserId = parseRequestedUserId(req.query.userId)
+  const scopedUserId = auth.isAdmin ? requestedUserId : auth.userId
+
+  const alerts = await prisma.stockItem.findMany({
+    where: {
+      ...(scopedUserId ? { userId: scopedUserId } : {}),
+      isActive: true,
+    },
+    orderBy: { name: 'asc' },
+  })
+
+  return res.json(alerts.filter((item) => item.quantityOnHand <= item.minQuantity))
 })
 
 if (isProduction) {
