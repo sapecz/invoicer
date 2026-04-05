@@ -1,7 +1,7 @@
 /**
  * Baselines all migrations for a DB created via "prisma db push".
- * Marks each migration as applied without re-running the SQL.
- * Safe to re-run — already-applied migrations are ignored.
+ * Recovers from failed migration state and marks historical migrations as applied,
+ * then lets "prisma migrate deploy" apply only newer PostgreSQL-safe migrations.
  */
 import { execSync } from 'child_process'
 
@@ -22,10 +22,19 @@ const migrations = [
   '20260401000100_add_admin_flag',
 ]
 
-for (const migration of migrations) {
+function tryResolve(mode, migration) {
   try {
-    execSync(`npx prisma migrate resolve --applied "${migration}"`, { stdio: 'inherit' })
+    execSync(`npx prisma migrate resolve --${mode} "${migration}"`, { stdio: 'inherit' })
   } catch {
-    // Already applied or _prisma_migrations already exists — safe to ignore
+    // Safe to ignore: migration may already be in desired state or table may not exist yet.
   }
+}
+
+// Recover from potentially broken migration state (P3018) first.
+for (const migration of migrations) {
+  tryResolve('rolled-back', migration)
+}
+
+for (const migration of migrations) {
+  tryResolve('applied', migration)
 }
