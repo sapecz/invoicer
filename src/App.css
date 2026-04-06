@@ -111,6 +111,11 @@
   padding: 0.4rem 0.5rem;
 }
 
+.toolbar-controls select option {
+  color: #121827;
+  background: #ffffff;
+}
+
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -1057,13 +1062,18 @@
   grid-template-columns: minmax(0, 440px);
 }
 
+.auth-form > button {
+  width: 100%;
+}
+
 .google-login-button {
   margin-top: 0.65rem;
+  width: min(100%, 440px);
   border: 1px solid var(--input-border);
   background: var(--card-bg);
   color: var(--text);
   border-radius: 0.6rem;
-  padding: 0.6rem 0.85rem;
+  padding: 0.6rem 0.7rem;
   cursor: pointer;
 }
 
