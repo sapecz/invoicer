@@ -2088,7 +2088,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
     }
 
     // Generate reset token
-    const resetToken = Math.random().toString(36).slice(2, 15)
+    const resetToken = generateResetToken()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
     await prisma.user.update({
@@ -2099,11 +2099,8 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
       },
     })
 
-    // Build reset link
-    const baseUrl = req.headers['x-forwarded-proto']
-      ? `${req.headers['x-forwarded-proto']}://${req.headers.host}`
-      : `http://localhost:${port}`
-    const resetLink = `${baseUrl}/?resetToken=${resetToken}`
+    // Build reset link (same route/params as user-initiated reset flow)
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`
 
     // Send reset email
     const htmlContent = `

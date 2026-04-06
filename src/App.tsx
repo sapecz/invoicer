@@ -3279,6 +3279,12 @@ function App() {
     }
   }
 
+  function closeAdminActionModal() {
+    setAdminActionInProgress(null)
+    setAdminActionUserId(null)
+    setAdminActionConfirm(false)
+  }
+
   function handleGoogleLogin() {
     window.location.href = apiUrl('/api/auth/google/start')
   }
@@ -5187,7 +5193,7 @@ function App() {
                             setAdminActionUserId(adminUser.id)
                             setAdminActionConfirm(false)
                           }}
-                          disabled={adminActionUserId === adminUser.id}
+                          disabled={adminActionLoading || adminActionUserId === adminUser.id}
                           title={language === 'cz' ? 'Smazat uživatele' : 'Delete user'}
                           aria-label={language === 'cz' ? 'Smazat uživatele' : 'Delete user'}
                         >
@@ -5201,7 +5207,7 @@ function App() {
                             setAdminActionUserId(adminUser.id)
                             setAdminActionConfirm(false)
                           }}
-                          disabled={adminActionUserId === adminUser.id}
+                          disabled={adminActionLoading || adminActionUserId === adminUser.id}
                           title={language === 'cz' ? 'Blokovat/odblokovat' : 'Block/unblock'}
                           aria-label={language === 'cz' ? 'Blokovat/odblokovat uživatele' : 'Block or unblock user'}
                           style={{ marginLeft: '5px' }}
@@ -5216,7 +5222,7 @@ function App() {
                             setAdminActionUserId(adminUser.id)
                             setAdminActionConfirm(false)
                           }}
-                          disabled={adminActionUserId === adminUser.id}
+                          disabled={adminActionLoading || adminActionUserId === adminUser.id}
                           title={language === 'cz' ? 'Resetovat heslo' : 'Reset password'}
                           aria-label={language === 'cz' ? 'Resetovat heslo uživatele' : 'Reset user password'}
                           style={{ marginLeft: '5px' }}
@@ -5271,9 +5277,7 @@ function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      setAdminActionInProgress(null)
-                      setAdminActionUserId(null)
-                      setAdminActionConfirm(false)
+                      closeAdminActionModal()
                     }}
                     disabled={adminActionLoading}
                   >
@@ -5284,13 +5288,17 @@ function App() {
                     className="primary"
                     onClick={() => {
                       if (adminActionConfirm && adminActionUserId) {
-                        if (adminActionInProgress === 'delete') {
-                          void handleAdminDeleteUser(adminActionUserId)
-                        } else if (adminActionInProgress === 'block') {
-                          const adminUser = adminUsers.find((u) => u.id === adminActionUserId)
-                          void handleAdminBlockUser(adminActionUserId, !adminUser?.isBlocked)
-                        } else if (adminActionInProgress === 'reset') {
-                          void handleAdminResetPassword(adminActionUserId)
+                        const requestedUserId = adminActionUserId
+                        const requestedAction = adminActionInProgress
+                        closeAdminActionModal()
+
+                        if (requestedAction === 'delete') {
+                          void handleAdminDeleteUser(requestedUserId)
+                        } else if (requestedAction === 'block') {
+                          const adminUser = adminUsers.find((u) => u.id === requestedUserId)
+                          void handleAdminBlockUser(requestedUserId, !adminUser?.isBlocked)
+                        } else if (requestedAction === 'reset') {
+                          void handleAdminResetPassword(requestedUserId)
                         }
                       }
                     }}
