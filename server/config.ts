@@ -34,8 +34,8 @@ export const config = {
   },
   brevo: {
     apiKey: process.env.BREVO_API_KEY ?? '',
-    fromEmail: process.env.BREVO_FROM_EMAIL ?? '',
-    fromName: process.env.BREVO_FROM_NAME ?? 'Invoicer',
+    fromEmail: process.env.BREVO_FROM_EMAIL ?? process.env.BREVO_SENDER_EMAIL ?? '',
+    fromName: process.env.BREVO_FROM_NAME ?? process.env.BREVO_SENDER_NAME ?? 'Invoicer',
   },
   integrations: {
     aresBaseUrl:

@@ -5237,7 +5237,7 @@ function App() {
             )}
           </div>
 
-          {adminActionInProgress && adminActionUserId && (
+          {adminActionInProgress && (
             <div style={{
               position: 'fixed',
               top: 0,
@@ -5287,19 +5287,21 @@ function App() {
                     type="button"
                     className="primary"
                     onClick={() => {
-                      if (adminActionConfirm && adminActionUserId) {
-                        const requestedUserId = adminActionUserId
-                        const requestedAction = adminActionInProgress
-                        closeAdminActionModal()
+                      const requestedUserId = adminActionUserId
+                      const requestedAction = adminActionInProgress
+                      closeAdminActionModal()
 
-                        if (requestedAction === 'delete') {
-                          void handleAdminDeleteUser(requestedUserId)
-                        } else if (requestedAction === 'block') {
-                          const adminUser = adminUsers.find((u) => u.id === requestedUserId)
-                          void handleAdminBlockUser(requestedUserId, !adminUser?.isBlocked)
-                        } else if (requestedAction === 'reset') {
-                          void handleAdminResetPassword(requestedUserId)
-                        }
+                      if (!adminActionConfirm || requestedUserId == null) {
+                        return
+                      }
+
+                      if (requestedAction === 'delete') {
+                        void handleAdminDeleteUser(requestedUserId)
+                      } else if (requestedAction === 'block') {
+                        const adminUser = adminUsers.find((u) => u.id === requestedUserId)
+                        void handleAdminBlockUser(requestedUserId, !adminUser?.isBlocked)
+                      } else if (requestedAction === 'reset') {
+                        void handleAdminResetPassword(requestedUserId)
                       }
                     }}
                     disabled={!adminActionConfirm || adminActionLoading}
