@@ -5206,7 +5206,7 @@ function App() {
                           aria-label={language === 'cz' ? 'Blokovat/odblokovat uživatele' : 'Block or unblock user'}
                           style={{ marginLeft: '5px' }}
                         >
-                          {adminUser.isBlocked ? '👤✅' : '👤🚫'}
+                          {adminUser.isBlocked ? '✅' : '🚫'}
                         </button>
                         <button
                           type="button"

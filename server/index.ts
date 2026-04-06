@@ -15,10 +15,6 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const port = config.port
 const jwtSecret = config.auth.jwtSecret
-const mailgunDomain = config.mailgun.domain
-const mailgunApiKey = config.mailgun.apiKey
-const mailgunApiBaseUrl = config.mailgun.apiBaseUrl
-const mailgunFromEmail = config.mailgun.fromEmail
 const brevoApiKey = config.brevo.apiKey
 const brevoFromEmail = config.brevo.fromEmail
 const brevoFromName = config.brevo.fromName
@@ -52,14 +48,12 @@ function generateResetToken(): string {
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (brevoApiKey) {
-    return sendEmailBrevo(to, subject, html)
-  } else if (mailgunDomain && mailgunApiKey) {
-    return sendEmailMailgun(to, subject, html)
-  } else {
-    console.warn('Neither Brevo nor Mailgun is configured. Skipping email send.')
+  if (!brevoApiKey || !brevoFromEmail) {
+    console.warn('Brevo is not configured. Skipping email send.')
     return false
   }
+
+  return sendEmailBrevo(to, subject, html)
 }
 
 async function sendEmailBrevo(to: string, subject: string, html: string): Promise<boolean> {
@@ -91,41 +85,6 @@ async function sendEmailBrevo(to: string, subject: string, html: string): Promis
     return response.ok
   } catch (error) {
     console.error('Brevo email send failed:', error)
-    return false
-  }
-}
-
-async function sendEmailMailgun(to: string, subject: string, html: string): Promise<boolean> {
-  try {
-    const fromAddress = mailgunFromEmail || `noreply@${mailgunDomain}`
-    const body = new URLSearchParams({
-      from: fromAddress,
-      to,
-      subject,
-      html,
-    })
-
-    const response = await fetch(`${mailgunApiBaseUrl}/v3/${mailgunDomain}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`api:${mailgunApiKey}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      console.error('Mailgun send failed', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-      })
-    }
-
-    return response.ok
-  } catch (error) {
-    console.error('Mailgun email send failed:', error)
     return false
   }
 }
