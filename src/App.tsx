@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import logoSrc from './assets/logo.png'
@@ -1147,6 +1147,7 @@ function App() {
   const [activeSection, setActiveSection] = useState<MenuSection>('invoices')
   const [activeSubmenu, setActiveSubmenu] = useState<SubmenuKey>('new')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef<HTMLDivElement | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
@@ -1156,6 +1157,25 @@ function App() {
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get('token') ?? '')
   const [newPassword, setNewPassword] = useState('')
   const [authDevHint, setAuthDevHint] = useState('')
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      return
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target
+      if (target instanceof Node && settingsRef.current && !settingsRef.current.contains(target)) {
+        setSettingsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+    }
+  }, [settingsOpen])
 
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [invoiceStatus, setInvoiceStatus] = useState<'draft' | 'unpaid' | 'paid'>('draft')
@@ -6704,7 +6724,7 @@ function App() {
         <div className="toolbar">
           <img src={brandLogoSrc} alt="Invoicer" className="brand-logo-hero" onError={(event) => { event.currentTarget.src = logoSrc }} />
           {token && (
-            <div className="settings-wrap">
+            <div className="settings-wrap" ref={settingsRef}>
               <button
                 type="button"
                 className="settings-button"
@@ -7040,7 +7060,7 @@ function App() {
           <section className="workspace-main">{renderSectionContent()}</section>
         </section>
       )}
-      <footer className="app-version">Verze 0.15</footer>
+      <footer className="app-version">Verze 0.16</footer>
     </main>
   )
 }
