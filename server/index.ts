@@ -47,6 +47,33 @@ function generateResetToken(): string {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
 }
 
+function buildPasswordResetEmail(resetLink: string, expiresLabel: string): string {
+  return `
+    <h2>Reset your password</h2>
+    <p><a href="${resetLink}">Click here to reset your password</a></p>
+    <p>Or use this link: ${resetLink}</p>
+    <p>This link will expire in ${expiresLabel}.</p>
+  `
+}
+
+async function issuePasswordResetEmail(userId: number, email: string, expiresMs: number): Promise<boolean> {
+  const resetToken = generateResetToken()
+  const resetTokenExpires = new Date(Date.now() + expiresMs)
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      resetToken,
+      resetTokenExpires,
+    },
+  })
+
+  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`
+  const expiresLabel = expiresMs >= 24 * 60 * 60 * 1000 ? '24 hours' : '1 hour'
+
+  return sendEmail(email, 'Reset your password', buildPasswordResetEmail(resetLink, expiresLabel))
+}
+
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!brevoApiKey || !brevoFromEmail) {
     console.warn('Brevo is not configured. Skipping email send.')
@@ -556,31 +583,15 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     return res.json({ message: 'If user exists, reset email has been sent' })
   }
 
-  const resetToken = generateResetToken()
-  const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+  const emailSent = await issuePasswordResetEmail(user.id, user.email, 60 * 60 * 1000)
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      resetToken,
-      resetTokenExpires,
-    },
-  })
-
-  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`
-  const resetHtml = `
-    <h2>Reset your password</h2>
-    <p><a href="${resetLink}">Click here to reset your password</a></p>
-    <p>Or use this link: ${resetLink}</p>
-    <p>This link will expire in 1 hour.</p>
-  `
-
-  const emailSent = await sendEmail(user.email, 'Reset your password', resetHtml)
+  if (!emailSent) {
+    return res.status(500).json({ message: 'Could not send reset email' })
+  }
 
   return res.json({
     message: 'If user exists, reset email has been sent',
-    resetToken: !isProduction ? resetToken : undefined,
-    emailSent,
+    emailSent: true,
   })
 })
 
@@ -620,6 +631,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
       passwordHash,
       resetToken: null,
       resetTokenExpires: null,
+      isVerified: true,
     },
   })
 
@@ -2087,31 +2099,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
       return res.status(404).json({ message: 'User not found' })
     }
 
-    // Generate reset token
-    const resetToken = generateResetToken()
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        resetToken,
-        resetTokenExpires: expiresAt,
-      },
-    })
-
-    // Build reset link (same route/params as user-initiated reset flow)
-    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`
-
-    // Send reset email
-    const htmlContent = `
-      <h2>Password Reset Request</h2>
-      <p>Click the link below to reset your password:</p>
-      <p><a href="${resetLink}" style="background-color: #007BFF; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a></p>
-      <p>Or copy this link: ${resetLink}</p>
-      <p>This link expires in 24 hours.</p>
-    `
-
-    const emailSent = await sendEmail(user.email, 'Password Reset Request', htmlContent)
+    const emailSent = await issuePasswordResetEmail(userId, user.email, 24 * 60 * 60 * 1000)
 
     if (!emailSent) {
       return res.status(500).json({ message: 'User found but email could not be sent' })
